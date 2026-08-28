@@ -3,6 +3,7 @@ package com.example.demo.dto.match;
 import com.example.demo.domain.MatchRequest;
 import com.example.demo.domain.MatchStatus;
 import com.example.demo.domain.MealTime;
+import com.example.demo.domain.Region;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -25,7 +26,7 @@ public class MatchStatusResponse implements java.io.Serializable {
     private final String status;
 
     private final String groupId;
-    private final String region;
+    private final Region region;
     private final LocalDate mealDate;
     private final MealTime mealTime;
     private final LocalDateTime expiresAt;

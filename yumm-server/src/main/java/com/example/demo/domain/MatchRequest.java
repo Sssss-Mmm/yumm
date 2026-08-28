@@ -35,8 +35,9 @@ public class MatchRequest {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    @Column(nullable = false, length = 50)
-    private String region; // 하드 조건: 지역
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private Region region; // 하드 조건: 지역
 
     @Column(nullable = false)
     private LocalDate mealDate; // 하드 조건: 식사 날짜
@@ -82,5 +83,21 @@ public class MatchRequest {
 
     public boolean isExpired(LocalDateTime now) {
         return status == MatchStatus.WAITING && expiresAt.isBefore(now);
+    }
+
+    /**
+     * 이 신청 때문에 새 신청을 막아야 하는지. (FR-M-05 / BR-01: 1인 1신청)
+     * 매칭이 잡힌 사람은 재신청으로 두 그룹에 동시 배정되면 안 되므로 MATCHED도 막되,
+     * 식사 날짜가 지나면 푼다. 취소했거나 만료된 신청은 막지 않는다.
+     */
+    public boolean blocksReapply(LocalDateTime now) {
+        if (status == MatchStatus.MATCHED) {
+            // ponytail: 날짜 비교 하나로 MATCHED를 만료시킨다. 종료 상태값도, 만료 배치도, 새 컬럼도 필요 없다.
+            // 한계: 오늘 점심에 매칭된 사람은 오늘 저녁을 신청할 수 없다(하루 단위라 시간대까지 못 본다).
+            // 두 그룹 동시 배정보다는 보수적인 쪽이 낫다고 보고 감수한다.
+            // 업그레이드 경로: 당일 재신청은 FR-C-02(그룹 이탈)가 수동 해제를 담당한다.
+            return !mealDate.isBefore(now.toLocalDate());
+        }
+        return status == MatchStatus.WAITING && !isExpired(now);
     }
 }

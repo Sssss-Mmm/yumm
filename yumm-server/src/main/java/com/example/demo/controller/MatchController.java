@@ -21,21 +21,23 @@ public class MatchController {
 
     /**
      * 밥메이트 매칭 신청 API.
-     * 지역/날짜/시간대/성별조건/선호음식을 받아 대기열에 등록하고, 곧바로 그룹 편성을 시도합니다.
+     * 지역/날짜/시간대/성별조건/선호음식을 받아 대기열에 등록합니다. 신청 시점에는 편성하지 않습니다(FR-G-06).
      *
      * @param userDetails 현재 인증된 사용자
      * @param request 매칭 조건
-     * @return 신청 직후 상태. 바로 3~4인이 모이면 MATCHED, 아니면 WAITING.
+     * @return 신청 직후 상태. 항상 WAITING이며, 편성 결과는 상태 조회로 확인합니다.
      */
     @PostMapping
-    @Operation(summary = "밥메이트 매칭 신청", description = "매칭 조건을 받아 대기열에 등록하고 3~4인 그룹 편성을 시도합니다.")
+    @Operation(summary = "밥메이트 매칭 신청",
+            description = "매칭 조건을 받아 대기열에 등록합니다. 응답은 항상 WAITING이고, "
+                    + "3~4인 그룹 편성은 30초 주기 스케줄러가 수행하므로 매칭 상태 조회 API로 확인합니다.")
     public ResponseEntity<ApiResponse<MatchStatusResponse>> apply(
             @AuthenticationPrincipal CustomUserDetails userDetails,
             @Valid @RequestBody MatchApplyRequest request) {
 
         MatchStatusResponse response = matchService.apply(userDetails.getId(), request);
 
-        return ApiResponse.ok(response.isMatched() ? "매칭이 성사되었습니다." : "매칭 대기열에 등록되었습니다.", response);
+        return ApiResponse.ok("매칭 대기열에 등록되었습니다.", response);
     }
 
     /**

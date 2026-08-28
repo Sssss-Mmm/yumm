@@ -2,6 +2,8 @@ package com.example.demo.service.impl;
 
 import com.example.demo.domain.MatchRequest;
 import com.example.demo.domain.MatchStatus;
+import com.example.demo.domain.MealTime;
+import com.example.demo.domain.Region;
 import com.example.demo.domain.User;
 import com.example.demo.dto.match.MatchApplyRequest;
 import com.example.demo.dto.match.MatchStatusResponse;
@@ -15,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -35,9 +38,12 @@ public class MatchServiceImpl implements MatchService {
     @Transactional
     public MatchStatusResponse apply(Long userId, MatchApplyRequest request) {
         LocalDateTime now = LocalDateTime.now();
-        User user = userRepository.findById(userId)
+        // 중복 검사보다 먼저 사용자 행을 잠근다. 같은 사용자가 동시에 신청해도
+        // 뒤 트랜잭션은 여기서 대기했다가 앞 신청이 커밋된 뒤 중복 검사를 하게 된다(BR-01).
+        User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
+        rejectIfInvalidMealDate(request.getMealDate(), now.toLocalDate());
         rejectIfAlreadyWaiting(userId, now);
 
         MatchRequest saved = matchRequestRepository.save(MatchRequest.builder()
@@ -52,11 +58,37 @@ public class MatchServiceImpl implements MatchService {
                 .expiresAt(now.plusMinutes(WAIT_MINUTES))
                 .build());
 
-        // ponytail: 편성 트리거는 신청 시점뿐. 스케줄러가 없어서 마지막 신청자는 다음 사람이
-        // 올 때까지 그룹이 안 만들어진다. 대기가 길어지는 게 문제되면 @Scheduled를 얹으면 된다.
-        formGroupsInBucket(saved, now);
+        // 편성은 MatchScheduler가 전담한다(FR-G-06). 신청 시점에 편성하면 마지막 신청자가
+        // 다음 사람이 올 때까지 안 묶이고, 편성 예외가 신청까지 롤백시킨다(NFR-08).
+        return MatchStatusResponse.waiting(saved, now);
+    }
 
-        return buildStatus(saved, now);
+    /**
+     * 한 버킷의 대기자들을 3~4인 그룹으로 묶는다. 만들어진 그룹 수를 돌려준다.
+     * 잠금은 findWaitingInBucket의 PESSIMISTIC_WRITE가 담당한다.
+     */
+    @Override
+    @Transactional
+    public int formGroupsInBucket(Region region, LocalDate mealDate, MealTime mealTime) {
+        LocalDateTime now = LocalDateTime.now();
+        List<MatchRequest> waiting = matchRequestRepository.findWaitingInBucket(region, mealDate, mealTime, now);
+
+        if (waiting.size() < GroupMatcher.MIN_SIZE) {
+            return 0;
+        }
+
+        Map<Long, MatchRequest> byId = new HashMap<>();
+        List<GroupMatcher.Candidate> candidates = waiting.stream()
+                .peek(m -> byId.put(m.getId(), m))
+                .map(MatchServiceImpl::toCandidate)
+                .toList();
+
+        List<List<GroupMatcher.Candidate>> groups = GroupMatcher.formGroups(candidates);
+        for (List<GroupMatcher.Candidate> group : groups) {
+            String groupId = UUID.randomUUID().toString();
+            group.forEach(c -> byId.get(c.id()).assignToGroup(groupId));
+        }
+        return groups.size();
     }
 
     @Override
@@ -78,30 +110,6 @@ public class MatchServiceImpl implements MatchService {
         request.cancel();
     }
 
-    /**
-     * 방금 들어온 신청과 같은 버킷의 대기자들을 3~4인 그룹으로 묶는다.
-     * 잠금은 findWaitingInBucket의 PESSIMISTIC_WRITE가 담당한다.
-     */
-    private void formGroupsInBucket(MatchRequest trigger, LocalDateTime now) {
-        List<MatchRequest> waiting = matchRequestRepository.findWaitingInBucket(
-                trigger.getRegion(), trigger.getMealDate(), trigger.getMealTime(), now);
-
-        if (waiting.size() < GroupMatcher.MIN_SIZE) {
-            return;
-        }
-
-        Map<Long, MatchRequest> byId = new HashMap<>();
-        List<GroupMatcher.Candidate> candidates = waiting.stream()
-                .peek(m -> byId.put(m.getId(), m))
-                .map(MatchServiceImpl::toCandidate)
-                .toList();
-
-        for (List<GroupMatcher.Candidate> group : GroupMatcher.formGroups(candidates)) {
-            String groupId = UUID.randomUUID().toString();
-            group.forEach(c -> byId.get(c.id()).assignToGroup(groupId));
-        }
-    }
-
     private static GroupMatcher.Candidate toCandidate(MatchRequest m) {
         return new GroupMatcher.Candidate(
                 m.getId(),
@@ -111,9 +119,22 @@ public class MatchServiceImpl implements MatchService {
                 m.getCreatedAt());
     }
 
+    /**
+     * 당일과 익일만 신청할 수 있다(FR-M-03 / FR-M-04). "오늘 기준"이라 Bean Validation으로는 표현이 안 된다.
+     *
+     * ponytail: 범위를 넓히면 버킷이 날짜별로 갈려 대기자가 흩어지고 3인이 모이지 않는다.
+     * 유동성이 충분해지면 그때 늘린다.
+     */
+    private void rejectIfInvalidMealDate(LocalDate mealDate, LocalDate today) {
+        if (mealDate.isBefore(today) || mealDate.isAfter(today.plusDays(1))) {
+            throw new CustomException(ErrorCode.INVALID_MEAL_DATE);
+        }
+    }
+
+    /** 대기 중이거나 이미 매칭된 신청이 있으면 새 신청을 막는다. 판단은 MatchRequest에 있다. */
     private void rejectIfAlreadyWaiting(Long userId, LocalDateTime now) {
         matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(userId)
-                .filter(m -> m.getStatus() == MatchStatus.WAITING && !m.isExpired(now))
+                .filter(m -> m.blocksReapply(now))
                 .ifPresent(m -> { throw new CustomException(ErrorCode.ALREADY_WAITING); });
     }
 

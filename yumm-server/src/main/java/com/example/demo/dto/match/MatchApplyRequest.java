@@ -3,7 +3,7 @@ package com.example.demo.dto.match;
 import com.example.demo.domain.FoodCategory;
 import com.example.demo.domain.GenderPreference;
 import com.example.demo.domain.MealTime;
-import jakarta.validation.constraints.NotBlank;
+import com.example.demo.domain.Region;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
@@ -16,8 +16,8 @@ import java.util.Set;
 @NoArgsConstructor
 public class MatchApplyRequest {
 
-    @NotBlank(message = "지역은 필수입니다.")
-    private String region;
+    @NotNull(message = "지역은 필수입니다.")
+    private Region region;
 
     @NotNull(message = "식사 날짜는 필수입니다.")
     private LocalDate mealDate;

@@ -1,6 +1,7 @@
 package com.example.demo.exception;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -24,6 +25,19 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new HashMap<>();
         body.put("error", "VALIDATION_FAILED");
         body.put("message", e.getBindingResult().getAllErrors().get(0).getDefaultMessage());
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    /**
+     * 요청 본문 파싱 실패. enum 밖의 값(예: region="강남구")이 여기서 걸린다.
+     * 아래 RuntimeException 핸들러가 먼저 잡으면 500이 나가므로 명시적으로 400으로 내린다.
+     * Jackson 원문 메시지는 내부 타입명을 흘리므로 노출하지 않는다.
+     */
+    @ExceptionHandler(HttpMessageNotReadableException.class)
+    public ResponseEntity<Map<String, Object>> handleNotReadable(HttpMessageNotReadableException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("error", ErrorCode.VALIDATION_ERROR.name());
+        body.put("message", ErrorCode.VALIDATION_ERROR.getMessage());
         return ResponseEntity.badRequest().body(body);
     }
 
