@@ -1,8 +1,13 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../api";
 
-// 서버 enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
-const REGIONS = ["강남", "홍대", "신촌", "건대", "종로", "여의도", "판교"];
+// 서버 Region enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
+// ponytail: 목록은 프론트 상수. 지역이 자주 바뀌면 그때 서버에서 내려받는다.
+const REGIONS = {
+  GANGNAM: "강남", HONGDAE: "홍대", SINCHON: "신촌", KONDAE: "건대",
+  JONGNO: "종로", YEOUIDO: "여의도", PANGYO: "판교",
+};
 const MEAL_TIMES = { LUNCH: "점심", DINNER: "저녁" };
 const GENDER_PREFS = { ANY: "상관없음", SAME_ONLY: "동성만" };
 const FOODS = {
@@ -14,7 +19,7 @@ type Member = { userId: number; nickname: string; profileImageUrl: string | null
 type Status = {
   status: "WAITING" | "MATCHED" | "CANCELLED" | "TIMEOUT";
   groupId: string | null;
-  region: string;
+  region: keyof typeof REGIONS;
   mealDate: string;
   mealTime: keyof typeof MEAL_TIMES;
   expiresAt: string;
@@ -72,7 +77,7 @@ const Match = () => {
           {status.status === "WAITING" ? "밥메이트 찾는 중…" : "매칭 완료!"}
         </h1>
         <p className="text-gray-600">
-          {status.region} · {status.mealDate} · {MEAL_TIMES[status.mealTime]}
+          {REGIONS[status.region]} · {status.mealDate} · {MEAL_TIMES[status.mealTime]}
         </p>
         {status.status === "WAITING" ? (
           <>
@@ -82,11 +87,19 @@ const Match = () => {
             <button onClick={cancel} className="border rounded p-2">신청 취소</button>
           </>
         ) : (
-          <ul className="flex flex-col gap-2">
-            {status.members.map((m) => (
-              <li key={m.userId} className="border rounded p-2">{m.nickname}</li>
-            ))}
-          </ul>
+          <>
+            <ul className="flex flex-col gap-2">
+              {status.members.map((m) => (
+                <li key={m.userId} className="border rounded p-2">{m.nickname}</li>
+              ))}
+            </ul>
+            {/* 채팅방 입장이 곧 참석 의사 표시다 (FR-C-01) */}
+            {status.groupId && (
+              <Link to={`/chat/${status.groupId}`} className="bg-blue-600 text-white rounded p-2 text-center">
+                채팅방 입장
+              </Link>
+            )}
+          </>
         )}
         {error && <p className="text-red-600 text-sm">{error}</p>}
       </div>
@@ -100,7 +113,7 @@ const Match = () => {
 
       <label className="flex flex-col gap-1">지역
         <select name="region" required className="border rounded p-2">
-          {REGIONS.map((r) => <option key={r}>{r}</option>)}
+          {Object.entries(REGIONS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
         </select>
       </label>
 
