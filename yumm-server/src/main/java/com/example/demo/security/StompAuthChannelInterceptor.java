@@ -1,6 +1,5 @@
 package com.example.demo.security;
 
-import com.example.demo.domain.MatchRequest;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.service.JwtRedisService;
 import com.example.demo.util.JwtUtils;
@@ -15,8 +14,6 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Component;
-
-import java.util.List;
 
 /**
  * WebSocket 인증/인가.
@@ -93,10 +90,8 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         }
 
         Long userId = currentUserId(accessor);
-        List<MatchRequest> members = matchRequestRepository.findByGroupId(roomId);
-        boolean isMember = members.stream().anyMatch(m -> m.getUser().getId().equals(userId));
 
-        if (!isMember) {
+        if (!matchRequestRepository.existsByGroupIdAndUser_Id(roomId, userId)) {
             throw new MessageDeliveryException("이 채팅방에 참여할 권한이 없습니다.");
         }
     }

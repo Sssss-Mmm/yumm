@@ -7,6 +7,9 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   // ponytail: 프록시로 붙어서 CORS 자체를 없앤다. 서버 CORS 설정 손댈 필요 없음.
   server: {
-    proxy: { '/api': 'http://localhost:8080' },
+    proxy: {
+      '/api': 'http://localhost:8080',
+      '/ws': { target: 'ws://localhost:8080', ws: true },
+    },
   },
 })

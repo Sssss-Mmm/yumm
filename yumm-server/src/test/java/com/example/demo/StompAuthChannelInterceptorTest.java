@@ -1,7 +1,5 @@
 package com.example.demo;
 
-import com.example.demo.domain.MatchRequest;
-import com.example.demo.domain.User;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.security.StompAuthChannelInterceptor;
@@ -22,6 +20,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -44,14 +44,8 @@ class StompAuthChannelInterceptorTest {
         channel = mock(MessageChannel.class);
 
         // 방에는 1번, 2번 사용자만 있다
-        when(matchRequestRepository.findByGroupId(ROOM_ID))
-                .thenReturn(List.of(memberOf(1L), memberOf(2L)));
-    }
-
-    private MatchRequest memberOf(Long userId) {
-        return MatchRequest.builder()
-                .user(User.builder().id(userId).build())
-                .build();
+        when(matchRequestRepository.existsByGroupIdAndUser_Id(eq(ROOM_ID), anyLong()))
+                .thenAnswer(invocation -> List.of(1L, 2L).contains(invocation.getArgument(1)));
     }
 
     private Message<byte[]> frame(StompCommand command, String destination, Long userId) {
