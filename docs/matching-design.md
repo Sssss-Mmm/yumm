@@ -149,29 +149,46 @@ DB가 행을 잠그므로 트랜잭션 경계와 정확히 일치한다. 애노�
 
 ## 8. 아직 안 푼 것
 
-### 그룹 확정 동의 ← 제일 중요
+### 그룹 확정 동의 — 만들지 않기로 했다
 
-**4명이 매칭됐는데 1명이 안 나오면 그룹이 깨진다.**
-실무에서는 유사도 계산보다 이쪽이 훨씬 어렵다. 지금 코드에는 이 단계가 아예 없다.
+**4명이 매칭됐는데 1명이 안 나오면 그룹이 깨진다.** 이걸 막으려고
+"매칭 후 N분 내 전원 확정" 단계를 검토했지만 만들지 않기로 했다.
 
-생각해볼 것:
-- 매칭 후 N분 내 전원 확정 안 하면 그룹 해체 → 남은 사람은 대기열 복귀?
-- 노쇼 이력 관리가 필요한가?
-- 3명 확정 + 1명 미확정이면 3명으로 진행할 것인가?
+**이유: 확정하라는 걸 사용자가 알 방법이 없다.** 푸시도 웹소켓 알림도 없어서
+`GET /api/match`를 직접 찔러보는 화면을 켜둔 사람만 확정할 수 있다. 그 상태로 기한을 걸면
+**확정을 안 한 사람과 확정할 기회가 없었던 사람이 구분되지 않아** 잘못 없는 사람이 노쇼 처리된다.
 
-### 채팅
+식사 시간에서 역산해 기한을 잡는 안도 검토했다 버렸다. `MealTime`은 `LUNCH`/`DINNER`뿐이라
+역산할 시각 자체가 없고("점심 = 12시"는 지어낸 값), 미리 신청하면 기한이 몇 시간 뒤가 되어
+의미가 없다. **몇 시에 만날지는 시스템이 정하지 않고 그룹이 정한다**는 것이 최종 결론이다.
 
-`ErrorCode`에 `CHAT_ROOM_NOT_FOUND`, `MESSAGE_SEND_FAILED`가 이미 있고,
-`console-client/chatClient.js`는 `ws://localhost:8080/ws`로 STOMP 연결을 시도하며
-`package.json`에 `@stomp/stompjs`도 들어 있다.
+**대신 채팅으로 흡수한다.** 실제 사람은 확정 버튼을 누르는 게 아니라 채팅방에서
+"저 갈게요, 몇 시에 볼까요?" 하고 약속을 잡는다. 채팅방 입장이 곧 참석 의사다.
 
-**그런데 서버에는 websocket 스타터도 `@MessageMapping`도 없다.**
-클라이언트만 먼저 짜두고 멈춘 상태. 매칭이 굴러가면 그다음 순서.
+나중에 알림 인프라가 생기면 다시 판단할 것:
+- 3명 확정 + 1명 미확정이면 3명으로 진행 (최소 인원을 만족하고, 제때 확정한 사람을 벌주면 안 됨)
+- 노쇼 이력은 남기지 않는다. 시스템 탓인데 사용자를 벌주게 된다
+
+### 채팅 — 서버 붙였다 (남은 것: 대화 저장)
+
+이미 있던 `console-client/chatClient.js`의 경로에 맞춰 서버를 붙였다.
+**채팅방 ID는 매칭 그룹의 `groupId`를 그대로 쓴다.** 방을 따로 만들 필요가 없고
+그룹 구성원 = 채팅방 참여자가 자동으로 성립한다.
+
+남은 것:
+- **대화를 저장하지 않는다.** 접속 중인 사람에게 전달만 하고, 새로고침하면 사라진다.
+  지난 대화를 봐야 하면 `ChatMessage` 엔티티와 조회 API를 추가한다.
+- 내장 심플 브로커라 **서버가 여러 대가 되면 다른 인스턴스의 사람에게 전달되지 않는다.**
+  Redis pub/sub이나 외부 브로커로 바꿔야 한다.
+- 입장/퇴장 알림 없음 (`type`은 현재 `TALK`뿐).
 
 ### 기타
 
 - 프론트(`yumm-web`)는 Vite 템플릿 + Login/Home/Registration 3페이지가 전부. 매칭 화면 없음.
-- `지역`이 자유 문자열이라 "강남"과 "강남구"가 다른 버킷이 된다. **선택지로 고정해야 한다.**
+- `지역`이 자유 문자열이라 "강남"과 "강남구"가 다른 버킷이 된다. 다만 **enum으로 박는 건 답이 아니다**
+  (지역 추가마다 재배포, 데이터를 코드에 박는 꼴). Region 테이블이나 행정동 코드가 맞는데,
+  **지역 단위를 구/동/캠퍼스 중 뭘로 할지가 제품 결정이라 그게 정해지기 전엔 뭘 만들어도 추측이다.**
+  사람이 몰려서 버킷이 갈리는 게 관측될 때 고쳐도 늦지 않다.
 - `yumm-inference`는 현재 미사용. 삭제 후보.
 
 ---
@@ -179,11 +196,14 @@ DB가 행을 잠그므로 트랜잭션 경계와 정확히 일치한다. 애노�
 ## 9. 지금까지 만들어진 것
 
 ```
-domain/    FoodCategory, MealTime, GenderPreference, MatchStatus, MatchRequest
-service/   GroupMatcher (순수 로직), MatchService + impl
+domain/     FoodCategory, MealTime, GenderPreference, MatchStatus, MatchRequest
+service/    GroupMatcher (순수 로직), MatchService + impl
 repository/ MatchRequestRepository
-dto/match/ MatchApplyRequest, MatchStatusResponse, MatchMemberResponse
-controller/ MatchController
+dto/match/  MatchApplyRequest, MatchStatusResponse, MatchMemberResponse
+dto/chat/   ChatMessageRequest, ChatMessageResponse
+config/     WebSocketConfig
+security/   StompAuthChannelInterceptor
+controller/ MatchController, ChatController
 ```
 
 | 메서드 | 경로 | 설명 |
@@ -192,12 +212,29 @@ controller/ MatchController
 | GET | `/api/match` | 내 매칭 상태 (성사 시 그룹원 포함) |
 | DELETE | `/api/match` | 대기 중 신청 취소 |
 
-`SecurityConfig`가 `anyRequest().authenticated()`라 전부 인증 필요. 별도 설정 안 했다.
+`SecurityConfig`가 `anyRequest().authenticated()`라 전부 인증 필요.
+`/ws`만 예외로 열어뒀는데, **HTTP 핸드셰이크에는 Authorization 헤더가 실리지 않기 때문**이다.
+실제 인증은 STOMP CONNECT 프레임에서 `StompAuthChannelInterceptor`가 한다.
 
-테스트: `GroupMatcherTest` 6개 (인원 부족 / 4인 성사 / 성별 쌍방 / 동성 3인 / 취향 우선 / 7명 4+3 분할).
+### 채팅 경로 (클라이언트가 이미 쓰고 있던 규약)
+
+| 구분 | 경로 |
+|---|---|
+| 연결 | `ws://localhost:8080/ws` (CONNECT 헤더에 `Authorization: Bearer ...`) |
+| 구독 | `/sub/chat/room/{groupId}` |
+| 발행 | `/pub/chatroom.{groupId}` |
+
+보낸 사람과 방 번호는 **본문이 아니라 인증 정보와 목적지 경로에서** 가져온다. 본문 값은 위조 가능하다.
+로그인만으로는 부족해서 SUBSCRIBE/SEND마다 그 그룹의 구성원인지 확인한다.
+
+### 테스트
+
+- `GroupMatcherTest` 6개 — 인원 부족 / 4인 성사 / 성별 쌍방 / 동성 3인 / 취향 우선 / 7명 4+3 분할
+- `StompAuthChannelInterceptorTest` 6개 — 구성원 구독 허용 / 비구성원 구독·발신 차단 /
+  미인증 차단 / 토큰 없는 CONNECT 차단 / 잘못된 목적지 차단
 
 ```bash
-JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ./mvnw -Dtest=GroupMatcherTest test
+JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ./mvnw test
 ```
 
 > 이 환경은 `java`가 21인데 `javac`가 17이고 `JAVA_HOME`이 비어 있어서
