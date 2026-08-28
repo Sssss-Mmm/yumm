@@ -27,11 +27,27 @@ public final class GroupMatcher {
     private GroupMatcher() {}
 
     public record Candidate(
-            Long id,
+            Long id,        // MatchRequest의 id (대기열의 한 자리)
+            Long userId,    // 사용자 id. 차단은 신청이 아니라 사람 사이의 관계라 따로 필요하다
             Gender gender,
             GenderPreference genderPreference,
             Set<FoodCategory> foodPreferences,
             LocalDateTime createdAt) {
+    }
+
+    /**
+     * 차단 관계 한 쌍. 어느 쪽이 차단했는지는 편성에서 중요하지 않으므로
+     * 생성 시점에 작은 id를 앞으로 정렬해 방향을 지운다. 대칭성이 자료구조로 보장되니
+     * 두 방향을 각각 넣어줄 필요도, 한쪽을 빠뜨릴 여지도 없다.
+     */
+    public record BlockedPair(long low, long high) {
+        public BlockedPair {
+            if (low > high) {
+                long swap = low;
+                low = high;
+                high = swap;
+            }
+        }
     }
 
     /**
@@ -42,7 +58,7 @@ public final class GroupMatcher {
      * 전역 최적해가 아니라 "먼저 온 사람이 먼저 매칭된다"를 보장하는 쪽을 택했다.
      * 대기자가 수백 명 규모로 커지고 매칭 품질이 문제되면 그때 지역 탐색을 얹으면 된다.
      */
-    public static List<List<Candidate>> formGroups(List<Candidate> waiting) {
+    public static List<List<Candidate>> formGroups(List<Candidate> waiting, Set<BlockedPair> blocked) {
         List<Candidate> pool = new ArrayList<>(waiting);
         pool.sort(Comparator.comparing(Candidate::createdAt).thenComparing(Candidate::id));
 
@@ -56,7 +72,7 @@ public final class GroupMatcher {
             group.add(seed);
 
             while (group.size() < MAX_SIZE) {
-                Candidate best = findBestFit(pool, used, group);
+                Candidate best = findBestFit(pool, used, group, blocked);
                 if (best == null) break;
                 group.add(best);
             }
@@ -72,13 +88,14 @@ public final class GroupMatcher {
     }
 
     /** 그룹 전원과 호환되는 후보 중 취향이 가장 많이 겹치는 사람. 동점이면 먼저 온 사람. */
-    private static Candidate findBestFit(List<Candidate> pool, Set<Long> used, List<Candidate> group) {
+    private static Candidate findBestFit(List<Candidate> pool, Set<Long> used, List<Candidate> group,
+                                        Set<BlockedPair> blocked) {
         Candidate best = null;
         int bestScore = -1;
 
         for (Candidate c : pool) {
             if (used.contains(c.id()) || containsId(group, c.id())) continue;
-            if (!compatibleWithAll(c, group)) continue;
+            if (!compatibleWithAll(c, group, blocked)) continue;
 
             int score = score(c, group);
             if (score > bestScore) { // pool이 대기순으로 정렬돼 있어 동점은 먼저 온 사람이 이긴다
@@ -89,12 +106,16 @@ public final class GroupMatcher {
         return best;
     }
 
-    static boolean compatibleWithAll(Candidate c, List<Candidate> group) {
-        return group.stream().allMatch(member -> compatible(c, member));
+    static boolean compatibleWithAll(Candidate c, List<Candidate> group, Set<BlockedPair> blocked) {
+        return group.stream().allMatch(member -> compatible(c, member, blocked));
     }
 
-    /** 성별 조건은 쌍방 충족이어야 한다. 한쪽만 만족하는 매칭은 성사시키지 않는다. */
-    static boolean compatible(Candidate a, Candidate b) {
+    /**
+     * 성별 조건은 쌍방 충족이어야 한다. 한쪽만 만족하는 매칭은 성사시키지 않는다.
+     * 차단도 같은 이유로 쌍방 배제다 — 누가 누구를 차단했든 둘은 같은 그룹에 들어가지 않는다(FR-S-02).
+     */
+    static boolean compatible(Candidate a, Candidate b, Set<BlockedPair> blocked) {
+        if (blocked.contains(new BlockedPair(a.userId(), b.userId()))) return false;
         return accepts(a, b) && accepts(b, a);
     }
 

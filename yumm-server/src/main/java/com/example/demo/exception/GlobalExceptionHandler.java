@@ -5,6 +5,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -35,6 +36,19 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleNotReadable(HttpMessageNotReadableException e) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("error", ErrorCode.VALIDATION_ERROR.name());
+        body.put("message", ErrorCode.VALIDATION_ERROR.getMessage());
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    /**
+     * 경로변수·쿼리파라미터 타입 변환 실패(예: /api/blocks/abc).
+     * 아래 RuntimeException 핸들러가 먼저 잡으면 500이 나가므로 명시적으로 400으로 내린다.
+     * 변환 실패 원문은 내부 타입명(java.lang.Long 등)을 흘리므로 노출하지 않는다.
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<Map<String, Object>> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         Map<String, Object> body = new HashMap<>();
         body.put("error", ErrorCode.VALIDATION_ERROR.name());
         body.put("message", ErrorCode.VALIDATION_ERROR.getMessage());

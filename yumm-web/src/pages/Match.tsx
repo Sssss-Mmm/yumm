@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, leaveGroup } from "../api";
+import { api, blockUser, leaveGroup, reportUser } from "../api";
+import { myUserId } from "../ws";
 
 // 서버 Region enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
 // ponytail: 목록은 프론트 상수. 지역이 자주 바뀌면 그때 서버에서 내려받는다.
@@ -13,6 +14,14 @@ const GENDER_PREFS = { ANY: "상관없음", SAME_ONLY: "동성만" };
 const FOODS = {
   KOREAN: "한식", CHINESE: "중식", JAPANESE: "일식", WESTERN: "양식",
   ASIAN: "아시안", FASTFOOD: "분식/패스트푸드", CAFE: "카페/디저트",
+};
+
+const REPORT_REASONS = {
+  HARASSMENT: "괴롭힘·불쾌한 언행",
+  OFF_PURPOSE: "목적 이탈 (영업·홍보·데이팅)",
+  NO_SHOW: "약속 불이행",
+  INAPPROPRIATE_PROFILE: "부적절한 프로필",
+  OTHER: "기타",
 };
 
 type Member = { userId: number; nickname: string; profileImageUrl: string | null };
@@ -33,7 +42,13 @@ const Match = () => {
   const [error, setError] = useState("");
   const [disbanded, setDisbanded] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  // ponytail: 신고/차단은 한 번에 하나. 그룹원별 상태 맵 대신 진행 중인 userId 하나만 들고 간다.
+  const [busy, setBusy] = useState<number | null>(null);
+  const [notice, setNotice] = useState<{ userId: number; text: string; ok: boolean } | null>(null);
   const prev = useRef<Status["status"] | null>(null);
+  // members는 나를 포함한 그룹 전원이다. 자기 자신은 신고·차단 대상이 아니다(서버가 400).
+  // 토큰이 없거나 깨져 null이면 누가 나인지 알 수 없으니 전원에게 그대로 노출한다 — 서버가 막는다.
+  const me = myUserId();
 
   // 신청 이력이 없으면 서버가 404를 준다. 그건 에러가 아니라 "신청 폼을 보여줄 때"라는 뜻.
   // 상태값은 늘지 않는다 → 해체는 MATCHED에서 WAITING + groupId null로 되돌아온 것으로 감지한다.
@@ -106,6 +121,41 @@ const Match = () => {
     }
   };
 
+  const report = async (e: React.FormEvent<HTMLFormElement>, userId: number) => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    setNotice(null);
+    setBusy(userId);
+    try {
+      await reportUser(userId, data.get("reason") as string, (data.get("detail") as string) || undefined);
+      form.closest("details")?.removeAttribute("open");
+      form.reset();
+      setNotice({ userId, text: "신고를 접수했습니다.", ok: true });
+    } catch (err) {
+      setNotice({ userId, text: (err as Error).message, ok: false });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // 차단은 이후 편성에만 적용된다. 지금 그룹은 유지되므로 확인 문구에서 "그룹 나가기"와 구분해준다.
+  const block = async (m: Member) => {
+    if (!confirm(
+      `${m.nickname}님을 차단하시겠습니까?\n차단은 해제할 수 없습니다.\n앞으로 매칭에서 다시 만나지 않지만, 지금 그룹은 그대로 유지됩니다. 이 그룹에서 나가려면 "그룹 나가기"를 사용하세요.`
+    )) return;
+    setNotice(null);
+    setBusy(m.userId);
+    try {
+      await blockUser(m.userId);
+      setNotice({ userId: m.userId, text: "차단했습니다. 이후 매칭에서 제외됩니다.", ok: true });
+    } catch (err) {
+      setNotice({ userId: m.userId, text: (err as Error).message, ok: false });
+    } finally {
+      setBusy(null);
+    }
+  };
+
   if (status?.status === "WAITING" || status?.status === "MATCHED") {
     return (
       <div className="max-w-sm mx-auto flex flex-col gap-3">
@@ -130,9 +180,53 @@ const Match = () => {
         ) : (
           <>
             <ul className="flex flex-col gap-2">
-              {status.members.map((m) => (
-                <li key={m.userId} className="border rounded p-2">{m.nickname}</li>
-              ))}
+              {status.members.map((m) => {
+                const isMe = me !== null && m.userId === me;
+                return (
+                <li key={m.userId} className="border rounded p-2 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>
+                      {m.nickname}
+                      {isMe && <span className="ml-1 text-sm text-gray-500">(나)</span>}
+                    </span>
+                    {!isMe && (
+                      <button
+                        type="button"
+                        onClick={() => block(m)}
+                        disabled={busy === m.userId}
+                        className="text-sm border rounded px-2 py-1 disabled:opacity-50"
+                      >
+                        차단
+                      </button>
+                    )}
+                  </div>
+                  {/* ponytail: 네이티브 details — 열림 상태를 React state로 들 이유가 없다 */}
+                  {!isMe && (
+                    <details className="text-sm">
+                      <summary className="cursor-pointer text-gray-600">신고</summary>
+                      <form onSubmit={(e) => report(e, m.userId)} className="flex flex-col gap-2 pt-2">
+                        <label className="flex flex-col gap-1">사유
+                          <select name="reason" required className="border rounded p-2">
+                            {Object.entries(REPORT_REASONS).map(([v, label]) => (
+                              <option key={v} value={v}>{label}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="flex flex-col gap-1">상세 내용 (선택)
+                          <textarea name="detail" rows={2} className="border rounded p-2" />
+                        </label>
+                        <button disabled={busy === m.userId} className="bg-blue-600 text-white rounded p-2 disabled:opacity-50">
+                          {busy === m.userId ? "보내는 중…" : "신고 보내기"}
+                        </button>
+                      </form>
+                    </details>
+                  )}
+                  {!isMe && notice?.userId === m.userId && (
+                    <p className={`text-sm ${notice.ok ? "text-green-700" : "text-red-600"}`}>{notice.text}</p>
+                  )}
+                </li>
+                );
+              })}
             </ul>
             {/* 채팅방 입장이 곧 참석 의사 표시다 (FR-C-01) */}
             <div className="flex gap-2">

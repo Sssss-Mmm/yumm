@@ -10,6 +10,7 @@ import com.example.demo.dto.match.MatchStatusResponse;
 import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.MatchRequestRepository;
+import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.GroupMatcher;
 import com.example.demo.service.MatchService;
@@ -22,7 +23,9 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -33,6 +36,7 @@ public class MatchServiceImpl implements MatchService {
 
     private final MatchRequestRepository matchRequestRepository;
     private final UserRepository userRepository;
+    private final UserBlockRepository userBlockRepository;
 
     @Override
     @Transactional
@@ -66,6 +70,10 @@ public class MatchServiceImpl implements MatchService {
     /**
      * 한 버킷의 대기자들을 3~4인 그룹으로 묶는다. 만들어진 그룹 수를 돌려준다.
      * 잠금은 findWaitingInBucket의 PESSIMISTIC_WRITE가 담당한다.
+     *
+     * 차단 관계(FR-S-02)는 이 버킷 대기자들 사이의 것만 쿼리 한 번으로 읽어 편성 로직에 데이터로 넘긴다.
+     * 이미 성사된 그룹은 건드리지 않는다 — 차단은 "이후" 편성에만 적용되고,
+     * 지금 그룹에서 나가는 건 leaveGroup(FR-C-02)의 몫이다.
      */
     @Override
     @Transactional
@@ -83,7 +91,7 @@ public class MatchServiceImpl implements MatchService {
                 .map(MatchServiceImpl::toCandidate)
                 .toList();
 
-        List<List<GroupMatcher.Candidate>> groups = GroupMatcher.formGroups(candidates);
+        List<List<GroupMatcher.Candidate>> groups = GroupMatcher.formGroups(candidates, blockedPairsAmong(waiting));
         for (List<GroupMatcher.Candidate> group : groups) {
             String groupId = UUID.randomUUID().toString();
             group.forEach(c -> byId.get(c.id()).assignToGroup(groupId));
@@ -148,9 +156,21 @@ public class MatchServiceImpl implements MatchService {
         });
     }
 
+    /** 이 버킷 대기자들 사이의 차단 관계. 후보 쌍마다 조회하면 버킷 크기의 제곱만큼 쿼리가 나간다. */
+    private Set<GroupMatcher.BlockedPair> blockedPairsAmong(List<MatchRequest> waiting) {
+        Set<Long> userIds = waiting.stream()
+                .map(m -> m.getUser().getId())
+                .collect(Collectors.toSet());
+
+        return userBlockRepository.findPairsAmong(userIds).stream()
+                .map(p -> new GroupMatcher.BlockedPair(p.getBlockerId(), p.getBlockedId()))
+                .collect(Collectors.toSet());
+    }
+
     private static GroupMatcher.Candidate toCandidate(MatchRequest m) {
         return new GroupMatcher.Candidate(
                 m.getId(),
+                m.getUser().getId(),
                 m.getUser().getGender(),
                 m.getGenderPreference(),
                 m.getFoodPreferences(),

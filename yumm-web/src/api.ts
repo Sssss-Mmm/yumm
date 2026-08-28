@@ -46,3 +46,10 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
 
 /** 매칭된 그룹에서 이탈한다. 남은 인원은 서버가 다시 WAITING으로 되돌린다. */
 export const leaveGroup = () => api<void>("/match/group", "DELETE");
+
+/** 신고. reason은 서버 enum 값(HARASSMENT 등). */
+export const reportUser = (reportedUserId: number, reason: string, detail?: string) =>
+  api<void>("/reports", "POST", { reportedUserId, reason, detail });
+
+/** 차단. 멱등이며 해제 API는 없다. 이후 편성에만 반영되고 현재 그룹은 유지된다. */
+export const blockUser = (userId: number) => api<void>(`/blocks/${userId}`, "POST");

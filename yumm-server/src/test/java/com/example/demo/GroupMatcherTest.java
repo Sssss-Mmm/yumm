@@ -4,6 +4,7 @@ import com.example.demo.domain.FoodCategory;
 import com.example.demo.domain.Gender;
 import com.example.demo.domain.GenderPreference;
 import com.example.demo.service.GroupMatcher;
+import com.example.demo.service.GroupMatcher.BlockedPair;
 import com.example.demo.service.GroupMatcher.Candidate;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -19,9 +20,14 @@ class GroupMatcherTest {
 
     private static final LocalDateTime BASE = LocalDateTime.of(2026, 8, 28, 12, 0);
 
-    /** 도착 순서를 id 순으로 두는 헬퍼 (id가 작을수록 먼저 도착) */
+    /** 도착 순서를 id 순으로 두는 헬퍼 (id가 작을수록 먼저 도착). 신청 id와 사용자 id는 같게 둔다. */
     private static Candidate candidate(long id, Gender gender, GenderPreference pref, FoodCategory... foods) {
-        return new Candidate(id, gender, pref, Set.of(foods), BASE.plusMinutes(id));
+        return new Candidate(id, id, gender, pref, Set.of(foods), BASE.plusMinutes(id));
+    }
+
+    /** 한식만 좋아하는 서로 호환되는 대기자 (차단 테스트용) */
+    private static Candidate plain(long id) {
+        return candidate(id, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN);
     }
 
     @Test
@@ -31,7 +37,7 @@ class GroupMatcherTest {
                 candidate(1, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN),
                 candidate(2, Gender.FEMALE, GenderPreference.ANY, FoodCategory.KOREAN));
 
-        assertThat(GroupMatcher.formGroups(waiting)).isEmpty();
+        assertThat(GroupMatcher.formGroups(waiting, Set.of())).isEmpty();
     }
 
     @Test
@@ -43,7 +49,7 @@ class GroupMatcherTest {
                 candidate(3, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN),
                 candidate(4, Gender.FEMALE, GenderPreference.ANY, FoodCategory.KOREAN));
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting);
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of());
 
         assertThat(groups).hasSize(1);
         assertThat(groups.get(0)).hasSize(4);
@@ -59,7 +65,7 @@ class GroupMatcherTest {
                 candidate(4, Gender.FEMALE, GenderPreference.ANY, FoodCategory.KOREAN));
 
         // 남2는 동성끼리 묶이지만 2명이라 부족하고, 여2는 남자를 받아도 남자가 거절해서 3명을 못 채운다
-        assertThat(GroupMatcher.formGroups(waiting)).isEmpty();
+        assertThat(GroupMatcher.formGroups(waiting, Set.of())).isEmpty();
     }
 
     @Test
@@ -71,7 +77,7 @@ class GroupMatcherTest {
                 candidate(3, Gender.FEMALE, GenderPreference.SAME_ONLY, FoodCategory.CAFE),
                 candidate(4, Gender.MALE, GenderPreference.ANY, FoodCategory.CAFE));
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting);
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of());
 
         assertThat(groups).hasSize(1);
         assertThat(groups.get(0)).extracting(Candidate::id).containsExactlyInAnyOrder(1L, 2L, 3L);
@@ -87,7 +93,7 @@ class GroupMatcherTest {
                 candidate(4, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN),   // 늦게 왔지만 겹침
                 candidate(5, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN));  // 늦게 왔지만 겹침
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting);
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of());
 
         assertThat(groups).hasSize(1);
         // 한식 3인이 먼저 붙고, 남은 한 자리는 동점이라 먼저 온 2번이 채운다
@@ -106,11 +112,49 @@ class GroupMatcherTest {
                 candidate(6, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN),
                 candidate(7, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN));
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting);
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of());
 
         assertThat(groups).hasSize(2);
         assertThat(groups).extracting(List::size).containsExactly(4, 3);
         // 아무도 두 그룹에 동시에 들어가지 않는다
         assertThat(groups.stream().flatMap(List::stream).map(Candidate::id).distinct().count()).isEqualTo(7L);
+    }
+
+    @Test
+    @DisplayName("차단 관계인 두 사람은 같은 그룹에 들어가지 않는다")
+    void blockedPairNeverShareGroup() {
+        List<Candidate> waiting = List.of(plain(1), plain(2), plain(3), plain(4));
+
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(1, 2)));
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0)).extracting(Candidate::userId).containsExactlyInAnyOrder(1L, 3L, 4L);
+    }
+
+    @Test
+    @DisplayName("차단은 어느 방향이든 배제된다 (2가 1을 차단해도 결과가 같다)")
+    void blockIsSymmetric() {
+        List<Candidate> waiting = List.of(plain(1), plain(2), plain(3), plain(4));
+
+        // 차단한 쪽이 2, 차단당한 쪽이 1인 경우
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(2, 1)));
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0)).extracting(Candidate::userId).containsExactlyInAnyOrder(1L, 3L, 4L);
+    }
+
+    @Test
+    @DisplayName("차단당한 사람도 차단자가 아닌 다른 사람들과는 정상 편성된다")
+    void blockedUserStillMatchesOthers() {
+        List<Candidate> waiting = List.of(plain(1), plain(2), plain(3), plain(4), plain(5), plain(6), plain(7));
+
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(1, 2)));
+
+        assertThat(groups).hasSize(2);
+        List<Candidate> groupOfTwo = groups.stream()
+                .filter(g -> g.stream().anyMatch(c -> c.userId() == 2L))
+                .findFirst()
+                .orElseThrow();
+        assertThat(groupOfTwo).extracting(Candidate::userId).containsExactlyInAnyOrder(2L, 6L, 7L);
     }
 }
