@@ -1,5 +1,6 @@
 package com.example.demo.dto.users;
 
+import jakarta.validation.constraints.NotNull;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -10,7 +11,9 @@ public class SignupRequest {
     private String password;
     private String nickname;
     private String gender;
-    private Integer age;
-    private String phoneNumber;
+
+    @NotNull(message = "출생연도는 필수 입력 항목입니다.")
+    private Integer birthYear;
+
     private String profileImageUrl;
-} 
+}

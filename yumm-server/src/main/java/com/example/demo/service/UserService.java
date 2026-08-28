@@ -3,8 +3,6 @@ package com.example.demo.service;
 import com.example.demo.dto.users.SignupRequest;
 import com.example.demo.dto.users.EmailResponse;
 import com.example.demo.dto.users.EmailUpdateRequest;
-import com.example.demo.dto.users.PhoneNumberResponse;
-import com.example.demo.dto.users.PhoneNumberUpdateRequest;
 import com.example.demo.dto.users.ProfileResponse;
 import com.example.demo.dto.users.ProfileUpdateRequest;
 import com.example.demo.dto.users.UserInfoDetailsResponse;
@@ -52,16 +50,6 @@ public interface UserService {
      * @return 변경된 프로필 정보를 포함한 DTO
      */
     EmailResponse updateEmail(Long userId, EmailUpdateRequest updateRequest);
-
-
-    /**
-     * 사용자의 전화번호를 변경합니다.
-     *
-     * @param userId      사용자의 고유 ID
-     * @param updateDto   새 전화번호와 본인 인증 정보를 담은 DTO
-     * @return 변경된 프로필 정보를 포함한 DTO
-     */
-    PhoneNumberResponse updatePhoneNumber(Long userId, PhoneNumberUpdateRequest updateRequest);
 
 
     /**

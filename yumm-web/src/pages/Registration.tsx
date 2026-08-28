@@ -2,6 +2,9 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api";
 
+// ponytail: 서버가 "올해 - birthYear >= 20"으로 판정하므로 max도 같은 식
+const maxBirthYear = new Date().getFullYear() - 20;
+
 const Registration = () => {
   const navigate = useNavigate();
   const [error, setError] = useState("");
@@ -15,8 +18,7 @@ const Registration = () => {
         password: form.get("password"),
         nickname: form.get("nickname"),
         gender: form.get("gender"),
-        age: Number(form.get("age")),
-        phoneNumber: form.get("phoneNumber"),
+        birthYear: Number(form.get("birthYear")),
       });
       navigate("/login");
     } catch (err) {
@@ -34,8 +36,9 @@ const Registration = () => {
         <option value="MALE">남성</option>
         <option value="FEMALE">여성</option>
       </select>
-      <input name="age" type="number" required min={1} max={120} placeholder="나이" className="border rounded p-2" />
-      <input name="phoneNumber" required placeholder="전화번호" className="border rounded p-2" />
+      <label className="flex flex-col gap-1">출생연도 (4자리)
+        <input name="birthYear" type="number" required min={maxBirthYear - 80} max={maxBirthYear} placeholder="예: 1998" className="border rounded p-2" />
+      </label>
       {error && <p className="text-red-600 text-sm">{error}</p>}
       <button className="bg-blue-600 text-white rounded p-2">가입하기</button>
     </form>

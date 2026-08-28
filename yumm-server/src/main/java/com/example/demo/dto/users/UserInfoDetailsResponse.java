@@ -12,8 +12,7 @@ public class UserInfoDetailsResponse {
     private final String email;
     private final String nickname;
     private final Gender gender;
-    private final Integer age;
-    private final String phoneNumber;
+    private final Integer birthYear;
     private final String profileImageUrl;
     private final UserRole role;
 
@@ -22,8 +21,7 @@ public class UserInfoDetailsResponse {
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .gender(user.getGender())
-                .age(user.getAge())
-                .phoneNumber(user.getPhoneNumber())
+                .birthYear(user.getBirthYear())
                 .profileImageUrl(user.getProfileImageUrl())
                 .role(user.getRole())
                 .build();

@@ -13,9 +13,6 @@ public interface UserRepository extends JpaRepository<User, Long> {
     // email로 회원 검색(로그인 ID)
     Optional<User> findByEmail(String email);
 
-    // phone으로 회원 검색
-    Optional<User> findByPhoneNumber(String phoneNumber);
-
     /**
      * 사용자 행을 쓰기 잠금한 채로 읽는다(1인 1신청, BR-01).
      * 매칭 신청은 "대기 행이 있나 확인 → 저장"이라 확인과 저장 사이에 다른 요청이 끼면

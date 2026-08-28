@@ -14,6 +14,8 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
+import java.time.Year;
+
 
 @Service
 @Transactional
@@ -31,6 +33,9 @@ public class UserServiceImpl implements UserService {
 
         // 사용자 중복 검사(이메일 존재 시 예외처리)
         validateDuplicateEmail(signupRequest.getEmail());
+
+        // 출생연도 검증 + 성인 여부 판정
+        validateAdultBirthYear(signupRequest.getBirthYear(), Year.now().getValue());
 
         // 사용자 원문 비밀번호를 BCrypt 해시 알고리즘으로 암호화
         String encodedPassword = passwordEncoder.encode(signupRequest.getPassword());
@@ -53,14 +58,33 @@ public class UserServiceImpl implements UserService {
                 .password(encodedPassword)
                 .nickname(signupRequest.getNickname())
                 .gender(genderEnum)
-                .age(signupRequest.getAge())
-                .phoneNumber(signupRequest.getPhoneNumber())
+                .birthYear(signupRequest.getBirthYear())
                 .profileImageUrl(signupRequest.getProfileImageUrl()) 
                 .role(defaultRole)
                 .build();
 
         // 회원 정보 DB에 저장
         userRepository.save(newUser);
+    }
+
+
+    /**
+     * 가입 가능한 출생연도인지 검증한다 (FR-A-04 / BR-08).
+     *
+     * 생년월일이 아니라 출생연도만 받으므로 생일이 아직 지나지 않았다고 가정해 보수적으로 판정한다.
+     * 즉 '올해 - 출생연도 >= 20'일 때만 만 19세 이상으로 본다. 이 때문에 경계에 걸린 사람은
+     * 최대 1년 늦게 가입하게 되지만, 미성년자를 실수로 받는 것보다 그쪽이 낫다.
+     *
+     * @param birthYear   가입 요청의 출생연도
+     * @param currentYear 판정 기준 연도(보통 올해)
+     */
+    public static void validateAdultBirthYear(Integer birthYear, int currentYear) {
+        if (birthYear == null || birthYear < 1900 || birthYear > currentYear) {
+            throw new CustomException(ErrorCode.VALIDATION_ERROR);
+        }
+        if (currentYear - birthYear < 20) {
+            throw new CustomException(ErrorCode.UNDERAGE_NOT_ALLOWED);
+        }
     }
 
 
@@ -135,23 +159,6 @@ public class UserServiceImpl implements UserService {
         jwtRedisService.invalidateAllUserTokens(userId, null);
 
         return EmailResponse.from(user);
-    }
-
-
-    /** 회원 전화번호 변경 */
-    @Override
-    public PhoneNumberResponse updatePhoneNumber(Long userId, PhoneNumberUpdateRequest updateRequest) {
-        // 사용자 조회
-        User user = findUserByIdOrThrow(userId);
-
-        if (!passwordEncoder.matches(updateRequest.getCurrentPassword(), user.getPassword())) {
-            throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
-        }
-
-        // 전화번호 변경 //User savedUser = userRepository.save(user);
-        user.updatePhoneNumber(updateRequest.getNewPhoneNumber());
-
-        return PhoneNumberResponse.from(user);
     }
 
     

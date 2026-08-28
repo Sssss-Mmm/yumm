@@ -32,10 +32,7 @@ public class User {
     private Gender gender; // 성별(불변값)
 
     @Column(nullable = false)
-    private int age; // 나이(불변값)
-
-    @Column(nullable = false, length = 20)
-    private String phoneNumber; // 핸드폰 번호
+    private int birthYear; // 출생연도(불변값). 성인 판정(FR-A-04/BR-08)의 근거라 나이 대신 연도로 저장한다
 
     @Column(length = 500)
     private String profileImageUrl; // 프로필 이미지 URL
@@ -68,11 +65,4 @@ public class User {
             this.email = newEmail;
     }
     
-    public void updatePhoneNumber(String newPhoneNumber) {
-        if (newPhoneNumber == null || newPhoneNumber.trim().isEmpty()) {
-            throw new IllegalArgumentException("핸드폰 번호는 필수 입력 항목입니다.");
-        }
-        this.phoneNumber = newPhoneNumber;
-    }
-
 }

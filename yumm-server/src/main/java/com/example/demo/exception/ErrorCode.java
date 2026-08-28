@@ -30,6 +30,8 @@ public enum ErrorCode {
 
     MATCH_REQUEST_NOT_FOUND(HttpStatus.NOT_FOUND, "매칭 신청 내역이 없습니다."),
 
+    UNDERAGE_NOT_ALLOWED(HttpStatus.FORBIDDEN, "만 19세 미만은 서비스를 이용할 수 없습니다."),
+
     INVALID_MEAL_DATE(HttpStatus.BAD_REQUEST, "식사 날짜는 오늘 또는 내일만 선택할 수 있습니다."),
 
     CHAT_ROOM_NOT_FOUND(HttpStatus.NOT_FOUND, "채팅방이 존재하지 않습니다."),

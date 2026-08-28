@@ -4,10 +4,9 @@ import com.example.demo.service.UserService;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.common.ApiResponse;
 import com.example.demo.dto.users.SignupRequest;
+import jakarta.validation.Valid;
 import com.example.demo.dto.users.EmailResponse;
 import com.example.demo.dto.users.EmailUpdateRequest;
-import com.example.demo.dto.users.PhoneNumberResponse;
-import com.example.demo.dto.users.PhoneNumberUpdateRequest;
 import com.example.demo.dto.users.ProfileResponse;
 import com.example.demo.dto.users.ProfileUpdateRequest;
 import com.example.demo.dto.users.UserInfoDetailsResponse;
@@ -34,7 +33,7 @@ public class UserController {
      */
     @PostMapping("/signup")
     @Operation(summary = "사용자 회원가입", description = "회원가입 요청 정보를 받아 새 사용자를 등록합니다.")
-    public ResponseEntity<ApiResponse<Void>> signup(@RequestBody SignupRequest signupRequest) {
+    public ResponseEntity<ApiResponse<Void>> signup(@Valid @RequestBody SignupRequest signupRequest) {
         
         userService.signup(signupRequest);
         
@@ -95,33 +94,15 @@ public class UserController {
 
 
     /**
-     * 회원 전화번호 변경 API.
-     * 현재 로그인된 사용자의 전화번호를 변경합니다.
-     *
-     * @param userDetails 현재 인증된 사용자의 CustomUserDetails 객체에서 ID를 추출하기 위함.
-     * @param updateRequest 변경할 새로운 전화번호와 현재 비밀번호(또는 인증 코드)를 담은 DTO.
-     * @return 업데이트된 사용자 전화번호 정보를 담은 DTO.
-     */
-    @PutMapping("/phone-number")
-    @Operation(summary = "사용자 전화번호 변경", description = "현재 비밀번호 인증 후 전화번호를 변경합니다.")
-    public ResponseEntity<ApiResponse<PhoneNumberResponse>> updatePhoneNumber(@AuthenticationPrincipal CustomUserDetails userDetails,
-                                                                              @RequestBody PhoneNumberUpdateRequest updateRequest) {
-        PhoneNumberResponse pNumResponse = userService.updatePhoneNumber(userDetails.getId(), updateRequest);
-
-        return ApiResponse.ok("전화번호가 성공적으로 변경되었습니다.", pNumResponse);
-    }
-
-
-    /**
      * 사용자 상세 정보 조회 API (개발/관리용).
-     * 현재 로그인한 사용자의 모든 상세 프로필 정보(전화번호, 이메일 등 민감 정보 포함)를 반환합니다.
+     * 현재 로그인한 사용자의 모든 상세 프로필 정보(이메일 등 민감 정보 포함)를 반환합니다.
      * 이 API는 민감 정보를 포함하므로 주의하여 사용해야 합니다.
      *
      * @param userDetails 현재 인증된 사용자의 CustomUserDetails 객체에서 ID를 추출하기 위함.
      * @return 조회된 사용자 상세 정보를 담은 DTO.
      */
     @GetMapping("/me/details")
-    @Operation(summary = "사용자 상세 정보 조회", description = "현재 로그인한 사용자의 모든 상세 프로필 정보를 반환합니다. 전화번호, 이메일 등 민감 정보 포함.")
+    @Operation(summary = "사용자 상세 정보 조회", description = "현재 로그인한 사용자의 모든 상세 프로필 정보를 반환합니다. 이메일 등 민감 정보 포함.")
     public ResponseEntity<ApiResponse<UserInfoDetailsResponse>> getUserDetails(@AuthenticationPrincipal CustomUserDetails userDetails) {
 
         UserInfoDetailsResponse userDetailsResponse = userService.getUserDetails(userDetails.getId());

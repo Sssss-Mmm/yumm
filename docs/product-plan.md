@@ -288,6 +288,7 @@
 | 안전 사고 | **치명적** | 신고·차단·이용약관·안전 수칙, 성인 인증, 관리자 대응 체계 |
 | 서비스 목적 이탈 (영업/데이팅) | 중간 | 신고 사유에 명시, 반복 위반 정지 |
 | 채팅 스케일아웃 시 메시지 분리 | 낮음(현시점) | 다중화 전 외부 브로커 전환 (NFR-07) |
+| **`users`에 죽은 `NOT NULL` 컬럼이 남아 신규 가입이 전부 실패** | 높음 | `ddl-auto=update`는 컬럼을 지우지도 제약을 풀지도 않는다. 엔티티에서 `phone_number`·`age`를 뺐으므로 **앱 배포 전에** 손으로 실행한다: `birth_year` 추가 → `age`에서 백필 → `NOT NULL` 설정 → `phone_number`·`age` 드롭. 불안하면 드롭 대신 `DROP NOT NULL`만 먼저 걸어도 INSERT는 살아난다. 백필값은 `age` 역산이라 추정치지만 성인 판정은 가입 시점에만 돌아 기존 행에 영향이 없다 |
 | **레거시 `region` 문자열이 남은 DB에 붙으면 편성 전체 정지** | 높음 | 배포 전 `SELECT DISTINCT region FROM match_requests`로 확인하고 enum 밖 값은 삭제한다. `ddl-auto=update`는 기존 컬럼 값도 체크 제약도 손대지 않는다. 마이그레이션 도구는 도입하지 않는다(외부 공개 전) |
 | ~~`@Scheduled`가 STOMP 브로커 태스크 풀 위에서 실행됨~~ | 해소 | `config/SchedulingConfig`가 `taskScheduler` 빈을 따로 등록해 분리했다. 빈 이름을 바꾸면 `TaskSchedulerRouter`의 이름 폴백이 깨져 다시 브로커 풀로 되돌아간다 |
 | 편성 실패가 신청 API를 실패시킴 | 중간 | 편성을 별도 트랜잭션/비동기로 분리 |
