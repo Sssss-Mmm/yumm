@@ -62,6 +62,17 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Long
     List<MatchRequest> findByGroupId(String groupId);
 
     /**
+     * 이탈 처리용. 그룹 구성원 행을 쓰기 잠금해서 읽는다.
+     *
+     * 잠그지 않으면 같은 그룹에서 두 명이 동시에 이탈할 때 뒤 트랜잭션이 앞 트랜잭션의
+     * 커밋을 못 보고, 이미 나간 사람을 낡은 스냅샷 그대로 WAITING으로 되살린다.
+     * 조회 전용 경로(getMyStatus)는 잠글 이유가 없으므로 findByGroupId를 그대로 쓴다.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT m FROM MatchRequest m WHERE m.groupId = :groupId")
+    List<MatchRequest> findByGroupIdForUpdate(@Param("groupId") String groupId);
+
+    /**
      * 그 그룹(=채팅방)의 구성원인지. 채팅 구독/발신(STOMP)과 지난 대화 조회(REST)가
      * 같은 판정을 써야 하므로 여기 한 곳에만 둔다.
      */

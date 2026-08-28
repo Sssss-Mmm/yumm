@@ -23,4 +23,10 @@ public interface MatchService {
 
     /** 대기 중인 매칭 신청 취소 */
     void cancel(Long userId);
+
+    /**
+     * 매칭된 그룹에서 이탈한다(FR-C-02). 남은 인원이 최소 인원 미달이면 그룹을 해체하고
+     * 남은 구성원을 대기열로 되돌린다(FR-C-03).
+     */
+    void leaveGroup(Long userId);
 }

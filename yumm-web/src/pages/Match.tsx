@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api } from "../api";
+import { api, leaveGroup } from "../api";
 
 // 서버 Region enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
 // ponytail: 목록은 프론트 상수. 지역이 자주 바뀌면 그때 서버에서 내려받는다.
@@ -31,15 +31,31 @@ const today = new Date().toISOString().slice(0, 10);
 const Match = () => {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState("");
+  const [disbanded, setDisbanded] = useState(false);
+  const [leaving, setLeaving] = useState(false);
+  const prev = useRef<Status["status"] | null>(null);
 
   // 신청 이력이 없으면 서버가 404를 준다. 그건 에러가 아니라 "신청 폼을 보여줄 때"라는 뜻.
-  const load = () => api<Status>("/match").then(setStatus).catch(() => setStatus(null));
+  // 상태값은 늘지 않는다 → 해체는 MATCHED에서 WAITING + groupId null로 되돌아온 것으로 감지한다.
+  const load = () =>
+    api<Status>("/match")
+      .then((next) => {
+        if (prev.current === "MATCHED" && next.status === "WAITING" && next.groupId === null) {
+          setDisbanded(true);
+        }
+        prev.current = next.status;
+        setStatus(next);
+      })
+      .catch(() => {
+        prev.current = null;
+        setStatus(null);
+      });
 
   useEffect(() => { load(); }, []);
 
-  // 대기 중일 때만 폴링. 서버가 신청 시점에만 편성을 돌리므로 상태는 내가 물어봐야 안다.
+  // 대기/매칭 중에는 계속 폴링. 매칭 후에도 그룹이 해체될 수 있으므로 MATCHED에서 멈추면 안 된다.
   useEffect(() => {
-    if (status?.status !== "WAITING") return;
+    if (status?.status !== "WAITING" && status?.status !== "MATCHED") return;
     const id = setInterval(load, 10_000);
     return () => clearInterval(id);
   }, [status?.status]);
@@ -47,15 +63,18 @@ const Match = () => {
   const apply = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
+    setDisbanded(false);
     const form = new FormData(e.currentTarget);
     try {
-      setStatus(await api<Status>("/match", "POST", {
+      const next = await api<Status>("/match", "POST", {
         region: form.get("region"),
         mealDate: form.get("mealDate"),
         mealTime: form.get("mealTime"),
         genderPreference: form.get("genderPreference"),
         foodPreferences: form.getAll("foodPreferences"),
-      }));
+      });
+      prev.current = next.status;
+      setStatus(next);
     } catch (err) {
       setError((err as Error).message);
     }
@@ -64,9 +83,26 @@ const Match = () => {
   const cancel = async () => {
     try {
       await api("/match", "DELETE");
+      prev.current = null;
       setStatus(null);
     } catch (err) {
       setError((err as Error).message);
+    }
+  };
+
+  const leave = async () => {
+    if (!confirm("그룹에서 나가시겠습니까? 채팅방에도 다시 들어갈 수 없습니다.")) return;
+    setError("");
+    setLeaving(true);
+    try {
+      await leaveGroup();
+      prev.current = null;   // 나간 사람에게 해체 배너를 띄우지 않는다
+      setDisbanded(false);
+      await load();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLeaving(false);
     }
   };
 
@@ -81,6 +117,11 @@ const Match = () => {
         </p>
         {status.status === "WAITING" ? (
           <>
+            {disbanded && (
+              <p className="border border-amber-300 bg-amber-50 text-amber-800 rounded p-2 text-sm">
+                그룹이 해체되어 다시 대기 중입니다.
+              </p>
+            )}
             <p className="text-sm text-gray-500">
               {new Date(status.expiresAt).toLocaleTimeString()}까지 기다립니다.
             </p>
@@ -94,11 +135,16 @@ const Match = () => {
               ))}
             </ul>
             {/* 채팅방 입장이 곧 참석 의사 표시다 (FR-C-01) */}
-            {status.groupId && (
-              <Link to={`/chat/${status.groupId}`} className="bg-blue-600 text-white rounded p-2 text-center">
-                채팅방 입장
-              </Link>
-            )}
+            <div className="flex gap-2">
+              {status.groupId && (
+                <Link to={`/chat/${status.groupId}`} className="flex-1 bg-blue-600 text-white rounded p-2 text-center">
+                  채팅방 입장
+                </Link>
+              )}
+              <button onClick={leave} disabled={leaving} className="flex-1 border rounded p-2 disabled:opacity-50">
+                {leaving ? "나가는 중…" : "그룹 나가기"}
+              </button>
+            </div>
           </>
         )}
         {error && <p className="text-red-600 text-sm">{error}</p>}

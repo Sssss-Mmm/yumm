@@ -81,6 +81,37 @@ public class MatchRequest {
         this.status = MatchStatus.CANCELLED;
     }
 
+    /**
+     * 매칭된 그룹에서 이탈한다(FR-C-02).
+     * groupId를 비우는 것만으로 그룹 채팅 구독/발신/조회 판정(existsByGroupIdAndUser_Id)에서도 빠진다.
+     */
+    public void leaveGroup() {
+        this.groupId = null;
+        cancel();
+    }
+
+    /**
+     * 그룹이 최소 인원 미달로 해체돼 다시 대기열로 돌아간다(FR-C-03).
+     * 만료 시각을 새로 받아야 이미 지난 expiresAt 때문에 곧바로 만료되지 않는다.
+     */
+    public void returnToWaiting(LocalDateTime expiresAt) {
+        this.groupId = null;
+        this.status = MatchStatus.WAITING;
+        this.expiresAt = expiresAt;
+    }
+
+    /**
+     * 이미 지나간 끼니인지. 지난 끼니는 다시 매칭해 줄 이유가 없다.
+     *
+     * ponytail: 날짜 단위로만 본다. MealTime(점심/저녁)에서 시각을 역산하지 않는 건
+     * 만날 시각을 시스템이 정하지 않는다는 기획 결정이라서다(product-plan 8절).
+     * rejectIfInvalidMealDate, blocksReapply도 같은 날짜 단위라 판정이 일관된다.
+     * 한계: 오늘 점심 그룹을 오후에 이탈하면 남은 인원은 여전히 대기열로 돌아간다.
+     */
+    public boolean isPastMeal(LocalDate today) {
+        return mealDate.isBefore(today);
+    }
+
     public boolean isExpired(LocalDateTime now) {
         return status == MatchStatus.WAITING && expiresAt.isBefore(now);
     }

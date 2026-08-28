@@ -110,6 +110,44 @@ public class MatchServiceImpl implements MatchService {
         request.cancel();
     }
 
+    /**
+     * 그룹 이탈(FR-C-02)과 최소 인원 미달 시 해체(FR-C-03)를 한 트랜잭션에서 처리한다.
+     * 대기열로 되돌린 신청은 다음 주기의 MatchScheduler가 알아서 재편성한다.
+     */
+    @Override
+    @Transactional
+    public void leaveGroup(Long userId) {
+        MatchRequest request = matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(userId)
+                .filter(m -> m.getStatus() == MatchStatus.MATCHED)
+                .orElseThrow(() -> new CustomException(ErrorCode.MATCH_REQUEST_NOT_FOUND));
+
+        // 이탈 처리 전에 그룹 행을 쓰기 잠금해서 조회하고 본인만 걷어낸다. 동시 이탈 트랜잭션은
+        // 여기서 대기했다가 앞 이탈이 커밋된 뒤의 그룹을 보게 된다(이미 나간 사람은 안 딸려온다).
+        List<MatchRequest> remaining = matchRequestRepository.findByGroupIdForUpdate(request.getGroupId()).stream()
+                .filter(m -> !m.getId().equals(request.getId()))
+                .toList();
+        request.leaveGroup();
+
+        if (remaining.size() >= GroupMatcher.MIN_SIZE) {
+            return;
+        }
+
+        // ponytail: 본인 행만 잠금 밖에서 먼저 읽는다. 동시 이탈 시 그 낡은 스냅샷이 그대로 다시
+        // 쓰이지만 leaveGroup()이 어차피 종료 상태로 덮으므로 결과가 달라지지 않는다.
+        // 업그레이드 경로: 그룹에 속성(식당, 확정)이 생기면 MatchGroup 엔티티로 승격해 그 행을 잠근다.
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime expiresAt = now.plusMinutes(WAIT_MINUTES);
+        remaining.forEach(m -> {
+            // 지난 끼니를 대기열로 되돌리면 findWaitingBuckets가 과거 날짜 버킷을 뱉어 스케줄러가
+            // 지난 날짜 그룹을 새로 편성하고, 이미 재신청한 사람은 WAITING 2건이 된다(BR-01 위반).
+            if (m.isPastMeal(now.toLocalDate())) {
+                m.cancel();
+            } else {
+                m.returnToWaiting(expiresAt);
+            }
+        });
+    }
+
     private static GroupMatcher.Candidate toCandidate(MatchRequest m) {
         return new GroupMatcher.Candidate(
                 m.getId(),

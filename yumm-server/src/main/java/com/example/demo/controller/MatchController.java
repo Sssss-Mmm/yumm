@@ -64,4 +64,21 @@ public class MatchController {
 
         return ApiResponse.ok("매칭 신청이 취소되었습니다.");
     }
+
+    /**
+     * 그룹 이탈 API. 매칭이 성사된 신청만 이탈할 수 있습니다.
+     * 이탈하면 그룹 채팅 접근도 함께 끊기고, 남은 인원이 3명 미만이면 그룹이 해체되어
+     * 남은 구성원은 다시 대기열로 돌아갑니다.
+     */
+    @DeleteMapping("/group")
+    @Operation(summary = "매칭 그룹 이탈",
+            description = "매칭된 그룹에서 나갑니다(FR-C-02). 남은 인원이 최소 인원(3명) 미만이면 그룹을 해체하고 "
+                    + "남은 구성원을 30분짜리 대기 상태로 되돌려 다음 편성 주기에 재매칭합니다(FR-C-03).")
+    public ResponseEntity<ApiResponse<Void>> leaveGroup(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        matchService.leaveGroup(userDetails.getId());
+
+        return ApiResponse.ok("그룹에서 나갔습니다.");
+    }
 }
