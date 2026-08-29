@@ -30,4 +30,10 @@ public class MatchApplyRequest {
 
     @NotEmpty(message = "선호 음식을 하나 이상 선택해 주세요.")
     private Set<FoodCategory> foodPreferences;
+
+    /**
+     * 2인 허용 여부(FR-M-12). 선택 항목이라 @NotNull을 걸지 않는다.
+     * primitive라 필드가 없는 요청은 false로 떨어진다 — 기본값이 미선택인 게 맞다.
+     */
+    private boolean allowPair;
 }

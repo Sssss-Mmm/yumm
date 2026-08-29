@@ -20,9 +20,22 @@ class GroupMatcherTest {
 
     private static final LocalDateTime BASE = LocalDateTime.of(2026, 8, 28, 12, 0);
 
-    /** 도착 순서를 id 순으로 두는 헬퍼 (id가 작을수록 먼저 도착). 신청 id와 사용자 id는 같게 둔다. */
+    /** 폴백 판정 기준 시각. 만료가 이보다 5분 이내로 남아야 2인이 성사된다. */
+    private static final LocalDateTime NOW = BASE.plusMinutes(10);
+
+    /**
+     * 도착 순서를 id 순으로 두는 헬퍼 (id가 작을수록 먼저 도착). 신청 id와 사용자 id는 같게 둔다.
+     * 만료는 NOW+30분이라 2인 폴백 창(5분) 밖이다 — 이 헬퍼로 만든 대기자는 폴백에 걸리지 않는다.
+     */
     private static Candidate candidate(long id, Gender gender, GenderPreference pref, FoodCategory... foods) {
-        return new Candidate(id, id, gender, pref, Set.of(foods), BASE.plusMinutes(id));
+        return new Candidate(id, id, gender, pref, Set.of(foods), BASE.plusMinutes(id),
+                NOW.plusMinutes(30), false);
+    }
+
+    /** 2인 허용을 고른 대기자. expiresIn이 5분 이내면 폴백 대상이 된다. */
+    private static Candidate pairOptIn(long id, long expiresInMinutes) {
+        return new Candidate(id, id, Gender.MALE, GenderPreference.ANY, Set.of(FoodCategory.KOREAN),
+                BASE.plusMinutes(id), NOW.plusMinutes(expiresInMinutes), true);
     }
 
     /** 한식만 좋아하는 서로 호환되는 대기자 (차단 테스트용) */
@@ -156,5 +169,69 @@ class GroupMatcherTest {
                 .findFirst()
                 .orElseThrow();
         assertThat(groupOfTwo).extracting(Candidate::userId).containsExactlyInAnyOrder(2L, 6L, 7L);
+    }
+
+    // --- 2인 폴백 (FR-G-08~10) ---
+
+    @Test
+    @DisplayName("쌍방이 2인 허용이고 만료가 임박하면 2인으로 성사된다")
+    void 폴백_성사() {
+        List<Candidate> waiting = List.of(pairOptIn(1, 3), pairOptIn(2, 3));
+
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(), NOW);
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0)).hasSize(2);
+    }
+
+    @Test
+    @DisplayName("한쪽만 2인 허용이면 2인 그룹을 만들지 않는다")
+    void 폴백은_쌍방일_때만() {
+        List<Candidate> waiting = List.of(
+                pairOptIn(1, 3),
+                candidate(2, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN)); // allowPair=false
+
+        assertThat(GroupMatcher.formGroups(waiting, Set.of(), NOW)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("만료까지 5분을 넘게 남기면 아직 2인으로 마감하지 않는다")
+    void 폴백은_만료_임박에만() {
+        List<Candidate> waiting = List.of(pairOptIn(1, 20), pairOptIn(2, 20));
+
+        assertThat(GroupMatcher.formGroups(waiting, Set.of(), NOW)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("3인을 만들 수 있으면 2인으로 마감하지 않는다")
+    void 삼인이_가능하면_삼인_우선() {
+        List<Candidate> waiting = List.of(pairOptIn(1, 3), pairOptIn(2, 3), pairOptIn(3, 3));
+
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(), NOW);
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0)).hasSize(3);
+    }
+
+    @Test
+    @DisplayName("차단 관계면 2인 폴백에서도 묶이지 않는다")
+    void 폴백도_차단을_지킨다() {
+        List<Candidate> waiting = List.of(pairOptIn(1, 3), pairOptIn(2, 3));
+
+        assertThat(GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(1, 2)), NOW)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("2인 허용자도 옵트인하지 않은 사람들과 3~4인 그룹을 만들 수 있다")
+    void 옵트인은_삼사인_편성을_막지_않는다() {
+        List<Candidate> waiting = List.of(
+                pairOptIn(1, 3),
+                candidate(2, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN),
+                candidate(3, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN));
+
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(), NOW);
+
+        assertThat(groups).hasSize(1);
+        assertThat(groups.get(0)).hasSize(3);
     }
 }

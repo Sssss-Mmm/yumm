@@ -106,6 +106,8 @@ const Match = () => {
         mealTime: form.get("mealTime"),
         genderPreference: form.get("genderPreference"),
         foodPreferences: form.getAll("foodPreferences"),
+        // 체크 안 하면 FormData에 키 자체가 없다 → false (FR-M-12 기본값)
+        allowPair: form.has("allowPair"),
       });
       prev.current = next.status;
       setStatus(next);
@@ -341,6 +343,17 @@ const Match = () => {
           ))}
         </div>
       </fieldset>
+
+      {/* FR-M-12: 기본 해제. FR-M-13: 고지는 접지 않고 상시 노출한다 */}
+      <div className={`${card} flex flex-col gap-2`}>
+        <label className="flex cursor-pointer items-center gap-2.5">
+          <input type="checkbox" name="allowPair" className="h-4 w-4 shrink-0 accent-orange-600" />
+          <span className={label}>2명이어도 괜찮아요</span>
+        </label>
+        <p className={muted}>
+          3~4명을 못 모으면 2명으로 만날 수 있어요. 2명은 상대가 나오지 않으면 만남 자체가 성립하지 않습니다.
+        </p>
+      </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button className={btn}>신청하기</button>

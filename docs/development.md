@@ -103,7 +103,23 @@ ALTER TABLE users ALTER COLUMN age DROP NOT NULL;
 
 백필값은 추정치다. 성인 판정(FR-A-04)은 가입 시점에만 돌아서 기존 행에는 영향이 없다.
 
-**2) `match_requests` — enum 밖 `region` 문자열이 남으면 편성 스케줄러가 정지한다**
+**2) `match_requests` — `allow_pair` 컬럼 추가**
+
+2인 허용 옵트인(FR-M-12). `ddl-auto=update`는 컬럼을 추가하지만 `NOT NULL` 컬럼을 기존 행에
+채워주지 못해 부팅이나 INSERT가 깨진다. 기본값을 먼저 주고 제약을 건다.
+
+```sql
+BEGIN;
+ALTER TABLE match_requests ADD COLUMN IF NOT EXISTS allow_pair boolean;
+UPDATE match_requests SET allow_pair = false WHERE allow_pair IS NULL;
+ALTER TABLE match_requests ALTER COLUMN allow_pair SET NOT NULL;
+ALTER TABLE match_requests ALTER COLUMN allow_pair SET DEFAULT false;
+COMMIT;
+```
+
+기존 신청을 전부 `false`로 두는 게 맞다. 고른 적 없는 사람을 2인 대상에 넣지 않는다.
+
+**3) `match_requests` — enum 밖 `region` 문자열이 남으면 편성 스케줄러가 정지한다**
 
 `region`은 `domain/Region.java`의 7개 값만 허용한다. 그 밖의 값이 있으면 조회 시 Hibernate가 매핑에 실패하고 30초 주기 편성이 통째로 멈춘다.
 

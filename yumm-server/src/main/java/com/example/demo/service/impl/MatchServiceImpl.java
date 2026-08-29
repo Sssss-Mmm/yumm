@@ -57,6 +57,7 @@ public class MatchServiceImpl implements MatchService {
                 .mealTime(request.getMealTime())
                 .genderPreference(request.getGenderPreference())
                 .foodPreferences(request.getFoodPreferences())
+                .allowPair(request.isAllowPair())
                 .status(MatchStatus.WAITING)
                 .createdAt(now)
                 .expiresAt(now.plusMinutes(WAIT_MINUTES))
@@ -81,7 +82,9 @@ public class MatchServiceImpl implements MatchService {
         LocalDateTime now = LocalDateTime.now();
         List<MatchRequest> waiting = matchRequestRepository.findWaitingInBucket(region, mealDate, mealTime, now);
 
-        if (waiting.size() < GroupMatcher.MIN_SIZE) {
+        // 2인 폴백이 있으므로 하한은 3이 아니라 2다(FR-G-08). 3으로 두면 대기자가 딱 2명일 때
+        // 폴백이 아예 실행되지 않는다.
+        if (waiting.size() < GroupMatcher.PAIR_SIZE) {
             return 0;
         }
 
@@ -91,7 +94,8 @@ public class MatchServiceImpl implements MatchService {
                 .map(MatchServiceImpl::toCandidate)
                 .toList();
 
-        List<List<GroupMatcher.Candidate>> groups = GroupMatcher.formGroups(candidates, blockedPairsAmong(waiting));
+        List<List<GroupMatcher.Candidate>> groups =
+                GroupMatcher.formGroups(candidates, blockedPairsAmong(waiting), now);
         for (List<GroupMatcher.Candidate> group : groups) {
             String groupId = UUID.randomUUID().toString();
             group.forEach(c -> byId.get(c.id()).assignToGroup(groupId));
@@ -174,7 +178,9 @@ public class MatchServiceImpl implements MatchService {
                 m.getUser().getGender(),
                 m.getGenderPreference(),
                 m.getFoodPreferences(),
-                m.getCreatedAt());
+                m.getCreatedAt(),
+                m.getExpiresAt(),
+                m.isAllowPair());
     }
 
     /**

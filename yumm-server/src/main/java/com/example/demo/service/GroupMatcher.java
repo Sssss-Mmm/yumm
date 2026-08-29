@@ -4,6 +4,7 @@ import com.example.demo.domain.FoodCategory;
 import com.example.demo.domain.Gender;
 import com.example.demo.domain.GenderPreference;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -24,6 +25,12 @@ public final class GroupMatcher {
     public static final int MIN_SIZE = 3;
     public static final int MAX_SIZE = 4;
 
+    /** 2인 폴백으로 성사되는 그룹 크기(FR-G-08). */
+    public static final int PAIR_SIZE = 2;
+
+    /** 폴백을 허용하는 만료 잔여 시간(FR-G-09). 이보다 여유가 있으면 3인을 더 기다린다. */
+    public static final Duration PAIR_FALLBACK_WINDOW = Duration.ofMinutes(5);
+
     private GroupMatcher() {}
 
     public record Candidate(
@@ -32,7 +39,9 @@ public final class GroupMatcher {
             Gender gender,
             GenderPreference genderPreference,
             Set<FoodCategory> foodPreferences,
-            LocalDateTime createdAt) {
+            LocalDateTime createdAt,
+            LocalDateTime expiresAt,   // 2인 폴백의 잔여시간 판정에 쓴다(FR-G-09)
+            boolean allowPair) {       // 2인 허용 옵트인(FR-M-12)
     }
 
     /**
@@ -59,6 +68,14 @@ public final class GroupMatcher {
      * 대기자가 수백 명 규모로 커지고 매칭 품질이 문제되면 그때 지역 탐색을 얹으면 된다.
      */
     public static List<List<Candidate>> formGroups(List<Candidate> waiting, Set<BlockedPair> blocked) {
+        return formGroups(waiting, blocked, LocalDateTime.now());
+    }
+
+    /**
+     * @param now 만료 잔여시간 판정 기준 시각. 테스트가 시계를 고정할 수 있도록 인자로 받는다.
+     */
+    public static List<List<Candidate>> formGroups(List<Candidate> waiting, Set<BlockedPair> blocked,
+                                                   LocalDateTime now) {
         List<Candidate> pool = new ArrayList<>(waiting);
         pool.sort(Comparator.comparing(Candidate::createdAt).thenComparing(Candidate::id));
 
@@ -84,7 +101,48 @@ public final class GroupMatcher {
                 group.forEach(c -> used.add(c.id()));
             }
         }
+
+        groups.addAll(formPairs(pool, used, blocked, now));
         return groups;
+    }
+
+    /**
+     * 3~4인 편성에서 남은 사람들 중 2인 그룹을 만든다(FR-G-08).
+     *
+     * <p>순서가 중요하다. 3인을 만들 수 있는데 2인으로 마감하면 손해이므로 폴백은 항상 뒤다.
+     * 조건은 셋이다 — 쌍방이 2인 허용을 골랐고(FR-G-10), 둘 다 만료가 임박했고(FR-G-09),
+     * 성별·차단 조건이 맞아야 한다.
+     *
+     * <p>allowPair를 {@link #compatible}에 넣지 않은 이유: 그건 2인 성사 조건이지 일반 호환성이
+     * 아니다. 거기 넣으면 옵트인한 사람이 옵트인하지 않은 사람들과 3~4인 그룹을 만들지 못한다.
+     */
+    private static List<List<Candidate>> formPairs(List<Candidate> pool, Set<Long> used,
+                                                   Set<BlockedPair> blocked, LocalDateTime now) {
+        List<Candidate> eligible = pool.stream()
+                .filter(c -> !used.contains(c.id()))
+                .filter(Candidate::allowPair)
+                .filter(c -> expiringSoon(c, now))
+                .toList();
+
+        List<List<Candidate>> pairs = new ArrayList<>();
+        for (Candidate seed : eligible) {
+            if (used.contains(seed.id())) continue;
+            for (Candidate other : eligible) { // eligible은 pool 정렬을 물려받아 먼저 온 사람이 먼저다
+                if (other.id().equals(seed.id()) || used.contains(other.id())) continue;
+                if (!compatible(seed, other, blocked)) continue;
+
+                pairs.add(List.of(seed, other));
+                used.add(seed.id());
+                used.add(other.id());
+                break;
+            }
+        }
+        return pairs;
+    }
+
+    /** 만료까지 남은 시간이 폴백 창 이내인가(FR-G-09). 이미 만료된 건은 상위에서 걸러져 들어오지 않는다. */
+    static boolean expiringSoon(Candidate c, LocalDateTime now) {
+        return Duration.between(now, c.expiresAt()).compareTo(PAIR_FALLBACK_WINDOW) <= 0;
     }
 
     /** 그룹 전원과 호환되는 후보 중 취향이 가장 많이 겹치는 사람. 동점이면 먼저 온 사람. */

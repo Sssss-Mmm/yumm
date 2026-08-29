@@ -72,6 +72,13 @@ public class MatchRequest {
     @Column(nullable = false)
     private LocalDateTime expiresAt; // 지나면 MATCHING_TIMEOUT. 별도 만료 배치 없이 조회 시 걸러낸다.
 
+    /**
+     * 2인 허용 옵트인(FR-M-12). 기본 false — 여럿이 먹으려고 온 사람에게 2인을 배정하면
+     * 기대와 다른 결과가 된다. 이 값이 2인 폴백의 스위치라 별도 기능 플래그를 두지 않는다.
+     */
+    @Column(nullable = false)
+    private boolean allowPair;
+
     public void assignToGroup(String groupId) {
         this.groupId = groupId;
         this.status = MatchStatus.MATCHED;
