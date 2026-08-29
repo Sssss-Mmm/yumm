@@ -1,5 +1,6 @@
 package com.example.demo.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -10,6 +11,7 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -55,11 +57,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.badRequest().body(body);
     }
 
+    /**
+     * 처리하지 못한 예외의 최종 방어선.
+     *
+     * 예외 원문을 응답에 실으면 DB 제약·컬럼·테이블명 같은 내부 구조가 그대로 나간다.
+     * /api/user/signup처럼 인증 없이 부를 수 있는 엔드포인트에서는 아무나 그걸 읽을 수 있으므로
+     * 클라이언트에는 일반 문구만 내리고 원인은 서버 로그에만 남긴다(NFR-05).
+     * 사용자에게 보여줄 메시지가 있는 오류는 CustomException으로 던지면 위 핸들러가 그대로 내려보낸다.
+     */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException e) {
+        log.error("처리되지 않은 예외", e);
         Map<String, Object> body = new HashMap<>();
-        body.put("error", "RUNTIME_EXCEPTION");
-        body.put("message", e.getMessage());
+        body.put("error", ErrorCode.INTERNAL_ERROR.name());
+        body.put("message", ErrorCode.INTERNAL_ERROR.getMessage());
         return ResponseEntity.internalServerError().body(body);
     }
 }

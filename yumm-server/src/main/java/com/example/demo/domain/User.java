@@ -85,6 +85,9 @@ public class User {
         this.nickname = "탈퇴한 사용자";
         this.profileImageUrl = null;
         this.withdrawnAt = at;
+        // 인증은 "이 주소를 실제로 받아본다"는 증명인데 주소를 @yumm.invalid로 덮었으므로 함께 무효화한다.
+        // 안 지우면 탈퇴자가 살아 있는 토큰으로 매칭 신청의 이메일 인증 게이트를 그대로 통과한다(FR-A-03/FR-A-08).
+        this.emailVerifiedAt = null;
     }
 
     public boolean isWithdrawn() {

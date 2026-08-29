@@ -45,7 +45,10 @@ class UserWithdrawTest {
 
     private static final Long USER_ID = 7L;
 
+    private static final String ACCESS_TOKEN = "header.payload.signature";
+
     private UserRepository userRepository;
+    private JwtRedisService jwtRedisService;
     private MatchRequestRepository matchRequestRepository;
     private MatchService matchService;
     private UserServiceImpl userService;
@@ -55,7 +58,8 @@ class UserWithdrawTest {
         userRepository = mock(UserRepository.class);
         matchRequestRepository = mock(MatchRequestRepository.class);
         matchService = mock(MatchService.class);
-        userService = new UserServiceImpl(userRepository, mock(PasswordEncoder.class), mock(JwtRedisService.class),
+        jwtRedisService = mock(JwtRedisService.class);
+        userService = new UserServiceImpl(userRepository, mock(PasswordEncoder.class), jwtRedisService,
                 matchRequestRepository, matchService, mock(EmailService.class));
     }
 
@@ -87,7 +91,7 @@ class UserWithdrawTest {
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(reported));
         when(matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(USER_ID)).thenReturn(Optional.empty());
 
-        userService.withdraw(USER_ID);
+        userService.withdraw(USER_ID, ACCESS_TOKEN);
 
         // 삭제하면 reports.reported_id(NOT NULL FK)가 깨진다. 행은 남아야 한다.
         verify(userRepository, never()).delete(any());
@@ -100,6 +104,10 @@ class UserWithdrawTest {
         assertThat(reported.getNickname()).isEqualTo("탈퇴한 사용자");
         assertThat(reported.getProfileImageUrl()).isNull();
         assertThat(reported.getPassword()).isNotBlank().doesNotStartWith("$2a$");
+
+        // 탈퇴 요청에 실린 Access Token은 그 자리에서 죽어야 한다. null을 넘기면 블랙리스트에
+        // 아무것도 안 들어가 만료(10시간)까지 그 토큰으로 서비스를 계속 쓸 수 있다.
+        verify(jwtRedisService).invalidateAllUserTokens(USER_ID, ACCESS_TOKEN);
     }
 
     @Test
@@ -130,7 +138,7 @@ class UserWithdrawTest {
         when(matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(USER_ID))
                 .thenReturn(Optional.of(matchRequest(MatchStatus.MATCHED)));
 
-        userService.withdraw(USER_ID);
+        userService.withdraw(USER_ID, ACCESS_TOKEN);
 
         // 그룹 해체(FR-C-03)가 leaveGroup에 딸려 있으므로 탈퇴 전용 경로를 만들지 않는다
         verify(matchService).leaveGroup(USER_ID);
@@ -140,7 +148,7 @@ class UserWithdrawTest {
         when(matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(USER_ID))
                 .thenReturn(Optional.of(matchRequest(MatchStatus.WAITING)));
 
-        userService.withdraw(USER_ID);
+        userService.withdraw(USER_ID, ACCESS_TOKEN);
 
         verify(matchService).cancel(USER_ID);
     }

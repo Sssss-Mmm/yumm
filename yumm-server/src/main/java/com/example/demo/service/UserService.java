@@ -64,9 +64,10 @@ public interface UserService {
     /**
      * 회원 탈퇴를 처리합니다.
      *
-     * @param userId 탈퇴할 사용자의 고유 ID
+     * @param userId      탈퇴할 사용자의 고유 ID
+     * @param accessToken 탈퇴 요청에 실린 Access Token. 그 자리에서 블랙리스트에 넣는다(없으면 null)
      */
-    void withdraw(Long userId);
+    void withdraw(Long userId, String accessToken);
 
 
     /**

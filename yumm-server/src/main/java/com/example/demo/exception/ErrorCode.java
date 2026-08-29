@@ -10,7 +10,8 @@ public enum ErrorCode {
 
     INVALID_TOKEN(HttpStatus.UNAUTHORIZED, "토큰이 유효하지 않습니다."),
     
-    INVALID_GENDER(HttpStatus.NOT_FOUND, "유효한 성별이 아닙니다."),
+    // enum 밖의 값은 "못 찾음"이 아니라 잘못된 입력이다. 404로 내리면 클라이언트가 경로 문제로 오해한다.
+    INVALID_GENDER(HttpStatus.BAD_REQUEST, "유효한 성별이 아닙니다."),
 
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     

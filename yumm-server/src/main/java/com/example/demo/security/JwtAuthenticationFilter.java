@@ -1,5 +1,6 @@
 package com.example.demo.security;
 
+import com.example.demo.repository.UserRepository;
 import com.example.demo.service.JwtRedisService;
 import com.example.demo.util.JwtUtils;
 import io.jsonwebtoken.JwtException;
@@ -32,6 +33,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
      */ 
     private final JwtUtils jwtUtil;
     private final JwtRedisService jwtRedisService;
+    private final UserRepository userRepository;
 
     // JWT 인증 필터 건너뛸 엔드포인트 작성(AccessToken을 들고 있는 경우만 필터링)
     private static final List<String> EXCLUDE_URLS = Arrays.asList(
@@ -46,10 +48,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     );
 
     
-    public JwtAuthenticationFilter(JwtUtils jwtUtil, JwtRedisService jwtRedisService) {
+    public JwtAuthenticationFilter(JwtUtils jwtUtil, JwtRedisService jwtRedisService, UserRepository userRepository) {
         this.jwtUtil = jwtUtil;
         this.jwtRedisService = jwtRedisService;
-
+        this.userRepository = userRepository;
     }
 
     /**
@@ -116,6 +118,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 throw new JwtException("Blacklisted token");
             }
              
+
+            /**
+             * 탈퇴 계정 차단(FR-A-08).
+             *
+             * 여기서 막는 이유: 탈퇴해도 이미 발급된 Access Token은 최대 만료시간(10시간)까지 서명이 유효하다.
+             * 탈퇴 요청에 실린 토큰은 블랙리스트로 즉시 죽이지만, 다른 기기에 남아 있는 토큰은 그러지 못한다.
+             * 서비스마다(매칭 신청, 채팅, 프로필...) isWithdrawn() 검사를 흩어 놓으면 새 엔드포인트가 생길 때마다
+             * 빠뜨리므로, 모든 인증 요청이 반드시 지나는 이 필터 한 곳에서 한 번에 거른다.
+             *
+             * ponytail: 토큰이 붙은 요청마다 exists 쿼리 한 번이 는다. 인덱스 걸린 PK 조회라 지금 규모에서는
+             * 무시할 수준이고, 부담이 되면 탈퇴 시 Redis에 'withdrawn:{userId}' 플래그를 토큰 TTL만큼 심고
+             * 그걸 읽는 쪽으로 바꾼다(블랙리스트 조회와 합쳐 Redis 왕복 한 번).
+             */
+            if (userRepository.existsByIdAndWithdrawnAtIsNotNull(jwtUtil.getUserIdFromToken(token))) {
+                throw new JwtException("Withdrawn account");
+            }
 
             /**
              * SecurityContext에 인증 객체 등록 (위의 토큰 유효성 검사 통과 시)
@@ -185,6 +203,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 errorMessage = "{\"message\": \"JWT 토큰이 만료되었습니다.\"}";
             } else if ("Blacklisted token".equals(ex.getMessage())) {
                 errorMessage = "{\"message\": \"블랙리스트에 등록된 토큰입니다.\"}";
+            } else if ("Withdrawn account".equals(ex.getMessage())) {
+                // 401로 내린다. 클라이언트는 재발급을 시도하지만 탈퇴 시 Refresh Token을 지웠으므로 그것도 실패해 로그아웃된다.
+                errorMessage = "{\"error\": \"WITHDRAWN_ACCOUNT\", \"message\": \"탈퇴한 계정입니다.\"}";
             } else {
                 errorMessage = "{\"message\": \"유효하지 않은 JWT 토큰입니다.\"}";
             }

@@ -50,7 +50,7 @@
 
 | ID | 요구사항 | 우선 | 상태 | 비고 |
 |---|---|---|---|---|
-| FR-A-01 | **이메일·비밀번호·닉네임·성별·생년**만으로 회원가입한다 | P0 | ✅ | `SignupRequest`가 이 5개만 받는다. 컨트롤러에 `@Valid` 추가 |
+| FR-A-01 | **이메일·비밀번호·닉네임·성별·생년**만으로 회원가입한다 | P0 | ✅ | `SignupRequest`가 이 5개만 받는다. 컨트롤러의 `@Valid`는 DTO에 제약이 있어야만 동작한다 — 이전에는 `birthYear`·`agreedToTerms`에만 제약이 있어 나머지 4개가 무검증이었고(누락 시 NPE·BCrypt 예외·NOT NULL 위반이 500으로 샜다) 지금은 `email`(@NotBlank/@Email/@Size), `password`(@NotBlank/@Pattern), `nickname`(@NotBlank/@Size), `gender`(@NotBlank)까지 걸어 전부 400이다. enum 밖 성별값은 `INVALID_GENDER`(400, 이전 404) |
 | FR-A-01a | 전화번호는 가입 시 받지 않는다 | P0 | ✅ | 엔티티·DTO·수정 API·리포지토리 메서드까지 전부 제거. `PUT /api/user/phone-number`는 폐기했다(해당 DTO에 게터가 없어 애초에 동작하지 않던 엔드포인트였다) |
 | FR-A-01b | 나이는 `age`(정수)가 아니라 **생년**으로 저장한다 | P0 | ✅ | `birth_year`(int, 출생연도). 생년월일이 아닌 이유는 5절 참조 |
 | FR-A-02 | 이메일 중복 가입을 차단한다 | P0 | ✅ | `DUPLICATE_EMAIL` |
@@ -59,8 +59,8 @@
 | FR-A-05 | 로그인 시 accessToken/refreshToken을 발급한다 | P0 | ✅ | `POST /api/auth/login` |
 | FR-A-06 | accessToken 만료 시 refreshToken으로 자동 재발급한다 | P1 | 🟡 | 서버 `POST /api/auth/refresh`는 있으나 웹이 사용하지 않음(만료 시 재로그인) |
 | FR-A-07 | 로그아웃 시 refreshToken을 무효화한다 | P0 | ✅ | Redis 블랙리스트 |
-| FR-A-08 | 회원 탈퇴 시 개인정보를 삭제한다. 단 신고 이력은 정책 기간 보존한다 | P1 | ✅ | **하드 삭제가 아니라 익명화다.** `users` 행은 남기고 이메일·비밀번호·닉네임·프로필이미지를 지운 뒤 `withdrawn_at`을 찍는다. 신고·차단·채팅·매칭 신청이 이 행을 NOT NULL FK로 물고 있어 삭제하면 FK 위반으로 실패하고, 성공하더라도 보존하기로 한 신고 이력이 함께 사라진다(`docs/privacy-policy.md` 5절). 이메일은 유니크 제약이 있어 `withdrawn-{id}@yumm.invalid`로 덮는다 — 원래 주소는 비므로 재가입할 수 있다. 진행 중인 매칭은 MATCHED면 그룹 이탈(FR-C-02), WAITING이면 신청 취소로 정리한다. 탈퇴 계정 로그인은 `WITHDRAWN_ACCOUNT`(403). **성별·생년은 NOT NULL이라 남아 있다**(방침 5절은 삭제 대상으로 적고 있다 — 정합 필요) |
-| FR-A-09 | 비밀번호는 8자 이상, 영문·숫자 조합이어야 한다 | P1 | 🟡 | 프론트만 `minLength=8`, 서버 검증 없음 |
+| FR-A-08 | 회원 탈퇴 시 개인정보를 삭제한다. 단 신고 이력은 정책 기간 보존한다 | P1 | ✅ | **하드 삭제가 아니라 익명화다.** `users` 행은 남기고 이메일·비밀번호·닉네임·프로필이미지를 지운 뒤 `withdrawn_at`을 찍는다. 신고·차단·채팅·매칭 신청이 이 행을 NOT NULL FK로 물고 있어 삭제하면 FK 위반으로 실패하고, 성공하더라도 보존하기로 한 신고 이력이 함께 사라진다(`docs/privacy-policy.md` 5절). 이메일은 유니크 제약이 있어 `withdrawn-{id}@yumm.invalid`로 덮는다 — 원래 주소는 비므로 재가입할 수 있다. 진행 중인 매칭은 MATCHED면 그룹 이탈(FR-C-02), WAITING이면 신청 취소로 정리한다. 탈퇴 시 `email_verified_at`도 비운다 — 안 비우면 살아 있는 토큰으로 매칭 신청의 이메일 인증 게이트를 그대로 통과한다. 탈퇴 계정 로그인은 `WITHDRAWN_ACCOUNT`(403)이고, **이미 발급된 Access Token(최대 10시간)은 `JwtAuthenticationFilter`가 요청마다 `withdrawn_at`을 확인해 401 `WITHDRAWN_ACCOUNT`로 끊는다** — 서비스마다 `isWithdrawn()`을 흩어 놓으면 새 엔드포인트에서 빠지므로 모든 인증 요청이 지나는 필터 한 곳에서 거른다. 탈퇴 요청에 실린 토큰은 그 자리에서 블랙리스트에 넣는다(이전에는 `invalidateAllUserTokens(userId, null)`이라 아무것도 안 들어갔다). **성별·생년은 NOT NULL이라 남아 있다**(방침 5절은 삭제 대상으로 적고 있다 — 정합 필요) |
+| FR-A-09 | 비밀번호는 8자 이상, 영문·숫자 조합이어야 한다 | P1 | ✅ | 서버에서 `SignupRequest.password`에 `@Pattern`(영문 1자 이상 + 숫자 1자 이상, 8~64자)으로 검증한다. 상한 64는 BCrypt가 72바이트 뒤를 잘라내기 때문이다. 프론트 `minLength=8`은 보조. 비밀번호 **변경**(`ChangePasswordRequest`)에는 아직 같은 제약이 없다 |
 | FR-A-10 | 로그인·가입 없이 지역별 대기 인원을 둘러볼 수 있다 | P1 | ❌ | 가입 전에 "여기 사람이 있다"를 보여줘야 가입할 이유가 생긴다 |
 
 > **연령 하한을 만 19세로 잡은 근거** — 법적 강제가 아니라 **정책 선택**이다.

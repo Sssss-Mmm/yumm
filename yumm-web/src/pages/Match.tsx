@@ -45,7 +45,12 @@ type ApplyPayload = {
   allowPair: boolean;
 };
 
-const today = new Date().toISOString().slice(0, 10);
+// 로컬 시간대 기준 YYYY-MM-DD. toISOString()은 UTC라 KST 00:00~09:00 사이에 어제가 나온다.
+// 예: KST 2026-08-29 08:00 → "2026-08-29" (toISOString()은 "2026-08-28")
+export const localDate = (d: Date = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const today = localDate();
 
 // 낯선 사람과 대면하는 서비스의 최소 고지. 한 번 확인하면 이 브라우저에서는 다시 띄우지 않는다.
 // ponytail: localStorage 플래그 하나. 기기별로 다시 뜨는 건 감수한다 — 서버 저장은 요청받지 않았다.

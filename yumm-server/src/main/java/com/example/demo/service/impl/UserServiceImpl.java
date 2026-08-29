@@ -204,9 +204,10 @@ public class UserServiceImpl implements UserService {
      * (개인정보처리방침 5절).
      */
     @Override
-    public void withdraw(Long userId) {
-        // 해당 사용자의 모든 토큰 삭제 (Redis에서 Refresh Token 삭제 및 Access Token 블랙리스트 추가)
-        jwtRedisService.invalidateAllUserTokens(userId, null);
+    public void withdraw(Long userId, String accessToken) {
+        // 해당 사용자의 모든 토큰 삭제 (Redis에서 Refresh Token 삭제 및 Access Token 블랙리스트 추가).
+        // 토큰을 넘기지 않으면 블랙리스트에 아무것도 안 들어가 방금 탈퇴한 그 토큰이 만료(10시간)까지 살아 있다.
+        jwtRedisService.invalidateAllUserTokens(userId, accessToken);
 
         // 사용자 조회(존재하지 않으면 예외처리)
         User user = findUserByIdOrThrow(userId);

@@ -172,13 +172,19 @@ public class UserController {
      * 회원 탈퇴 시, 관련 모든 데이터(예: Refresh Token)가 무효화됩니다.
      *
      * @param userDetails 현재 인증된 사용자의 CustomUserDetails 객체에서 ID를 추출하기 위함.
+     * @param authHeader  이 요청의 Authorization 헤더. 여기 실린 Access Token을 즉시 블랙리스트에 넣는다.
      * @return 회원 탈퇴 성공 메시지를 포함하는 응답.
      */
     @DeleteMapping("/withdraw")
     @Operation(summary = "회원 탈퇴", description = "회원 탈퇴를 처리합니다. 사용자의 모든 데이터가 삭제됩니다.")
-    public ResponseEntity<ApiResponse<Void>> withdraw(@AuthenticationPrincipal CustomUserDetails userDetails) {
-    
-        userService.withdraw(userDetails.getId());
+    public ResponseEntity<ApiResponse<Void>> withdraw(@AuthenticationPrincipal CustomUserDetails userDetails,
+                                                      @RequestHeader(value = "Authorization", required = false) String authHeader) {
+
+        // 필터를 통과해 여기까지 왔으므로 헤더는 정상이지만, 형식이 어긋나도 탈퇴 자체는 진행한다.
+        String accessToken = (authHeader != null && authHeader.startsWith("Bearer "))
+                ? authHeader.substring("Bearer ".length()) : null;
+
+        userService.withdraw(userDetails.getId(), accessToken);
     
         return ApiResponse.ok("회원 탈퇴가 완료되었습니다.");
     }

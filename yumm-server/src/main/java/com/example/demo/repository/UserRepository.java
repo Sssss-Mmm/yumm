@@ -19,6 +19,12 @@ public interface UserRepository extends JpaRepository<User, Long> {
      * 같은 사용자의 WAITING 행이 여러 개 생기고 혼자짜리 3인 그룹이 만들어진다.
      * 신청 진입에서 이 조회로 사용자 행을 잠가 같은 사용자의 신청만 직렬화한다.
      */
+    /**
+     * 탈퇴한 계정인지만 확인한다(FR-A-08). 인증 필터가 토큰이 붙은 요청마다 호출하므로
+     * 엔티티를 통째로 읽지 않고 존재 여부만 묻는다.
+     */
+    boolean existsByIdAndWithdrawnAtIsNotNull(Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM User u WHERE u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);
