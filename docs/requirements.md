@@ -54,7 +54,7 @@
 | FR-A-01a | 전화번호는 가입 시 받지 않는다 | P0 | ✅ | 엔티티·DTO·수정 API·리포지토리 메서드까지 전부 제거. `PUT /api/user/phone-number`는 폐기했다(해당 DTO에 게터가 없어 애초에 동작하지 않던 엔드포인트였다) |
 | FR-A-01b | 나이는 `age`(정수)가 아니라 **생년**으로 저장한다 | P0 | ✅ | `birth_year`(int, 출생연도). 생년월일이 아닌 이유는 5절 참조 |
 | FR-A-02 | 이메일 중복 가입을 차단한다 | P0 | ✅ | `DUPLICATE_EMAIL` |
-| FR-A-03 | 이메일 인증을 통과해야 매칭 신청이 가능하다. **가입 시점이 아니라 첫 신청 직전에 요구한다** | P0 | ✅ | `POST /api/user/verify-email`(발송) · `/confirm`(확인). 코드는 6자리 숫자를 Redis에 `emailVerify:{userId}`로 10분 TTL로 두고, 재발송은 같은 키를 덮어 이전 코드를 무효화한다. 완료 표시는 `users.email_verified_at`. 막는 건 `POST /api/match` 하나뿐이라 가입·로그인·프로필 수정은 미인증으로도 된다 — 실패는 `EMAIL_NOT_VERIFIED`(403). 이메일을 바꾸면 인증이 풀린다 |
+| FR-A-03 | 이메일 인증을 통과해야 매칭 신청이 가능하다. **가입 시점이 아니라 첫 신청 직전에 요구한다** | P0 | ✅ | `POST /api/user/verify-email`(발송) · `/confirm`(확인). 코드는 6자리 숫자를 Redis에 `emailVerify:{userId}`로 10분 TTL로 두고, 재발송은 같은 키를 덮어 이전 코드를 무효화한다. 완료 표시는 `users.email_verified_at`. 막는 건 `POST /api/match` 하나뿐이라 가입·로그인·프로필 수정은 미인증으로도 된다 — 실패는 `EMAIL_NOT_VERIFIED`(403). 이메일을 바꾸면 인증이 풀린다. 시도 제한·재발송 쿨다운은 FR-S-07/08 |
 | FR-A-04 | 만 19세 미만은 서비스를 이용할 수 없다. 확인은 **생년 입력만**으로 하고 별도 본인인증(PASS 등)은 두지 않는다 | P0 | ✅ | 가입 시 `올해 - 생년 >= 20`만 통과시킨다. 생일 미경과를 가정한 보수적 판정이라 경계 대상은 최대 1년 늦게 가입한다. `UNDERAGE_NOT_ALLOWED`(403) |
 | FR-A-05 | 로그인 시 accessToken/refreshToken을 발급한다 | P0 | ✅ | `POST /api/auth/login` |
 | FR-A-06 | accessToken 만료 시 refreshToken으로 자동 재발급한다 | P1 | 🟡 | 서버 `POST /api/auth/refresh`는 있으나 웹이 사용하지 않음(만료 시 재로그인) |
@@ -183,6 +183,8 @@
 | FR-S-04 | 신고 누적/중대 위반 시 관리자가 계정을 정지한다 | P1 | ❌ | |
 | FR-S-05 | 매칭 전 화면에 안전 수칙(공개된 장소, 개인정보 미공유)을 고지한다 | P0 | ✅ | 비용 거의 0, 사고 시 방어선. 첫 신청 직전 1회 고지, 확인 여부는 `localStorage`에 둔다 |
 | FR-S-06 | 가입 시 서비스 이용약관·개인정보처리방침에 동의받는다 | P0 | ✅ | 법적 필수. 이용 계약이 가입에서 성립하므로 동의 시점도 거기다. 첫 신청까지 미루면 미동의 계정이 로그인·프로필 수정·채팅을 이미 할 수 있다. `SignupRequest.agreedToTerms`(@AssertTrue) + `User.termsAgreedAt` |
+| FR-S-07 | 인증 코드·로그인 비밀번호의 대입 시도를 제한한다 | P0 | ✅ | 카운터는 전부 Redis. **인증 코드**: 오입력 5회를 넘으면 `emailVerify:{userId}`를 삭제해 그 코드를 버린다 — 6자리(경우의 수 1,000,000)라 5회로 맞힐 확률은 0.0005%이고, 새 코드는 FR-S-08의 쿨다운을 거쳐야 나오므로 시도 속도가 분당 5회로 묶인다. 실패 코드 `TOO_MANY_VERIFICATION_ATTEMPTS`(429). **로그인**: 5회 실패 시 10분 잠금, 실패 코드 `TOO_MANY_LOGIN_ATTEMPTS`(429). 잠금 키는 계정이 아니라 **(요청 출처 IP + 이메일 해시) 조합**이다 — 계정 단위로 잠그면 남의 이메일로 일부러 실패시켜 로그인을 막는 서비스 거부가 성립한다. 없는 계정에 대한 시도도 세서 "안 잠기는 이메일 = 미가입"이 새지 않게 한다. 여러 IP에 흩어진 대입은 이 층에서 못 막는다(앞단 rate limit의 몫) |
+| FR-S-08 | 인증 메일 재발송에 쿨다운을 둔다 | P0 | ✅ | `POST /api/user/verify-email` 재호출은 60초 간격. SMTP 발신 쿼터가 마르면 `EmailServiceImpl`이 실패를 삼키므로 FR-N-01/02/04 알림 3종이 조용히 전부 멈춘다 — FR-N-04는 FR-G-11(2인 폴백 노출)의 선행 조건이라 그 게이트의 근거까지 사라진다. 거부 응답은 `EMAIL_VERIFICATION_COOLDOWN`(429) + 본문 `retryAfterSeconds`(남은 초, 화면 카운트다운용). 쿨다운은 발송 **전에** 걸어 SMTP 왕복(최대 5초) 동안 들어온 요청이 통과하지 않게 한다. 계정당 일일 상한은 아직 없다 |
 
 ### 3.9 관리자
 
@@ -208,6 +210,7 @@
 | NFR-08 | 가용성 | 매칭 편성 실패가 신청 API 전체를 실패시키지 않을 것 | ✅ FR-G-06으로 해소. 신청은 저장만 하고, 편성 실패는 스케줄러 안에서 격리된다(버킷 단위 + 주기 단위 2중) |
 | NFR-09 | 법규 | 개인정보처리방침·이용약관 게시, 탈퇴 시 파기 절차 | ✅ 본문(`docs/terms-of-service.md`, `docs/privacy-policy.md`)을 `/terms`·`/privacy` 라우트로 게시(비로그인 열람 가능), 가입 동의 문구에서 링크 연결 |
 | NFR-10 | 접근성 | 모바일 웹 우선(360px~), 폼 라벨 제공 | 🟡 |
+| NFR-11 | 보안 | 운영 프로파일에서 API 문서(Swagger/OpenAPI)를 노출하지 않을 것 | ✅ `application-prod.properties`에서 `springdoc.*.enabled=false`. `SecurityConfig`가 `/v3/api-docs/**`·`/swagger-ui/**`를 permitAll로 열어 두므로 켜져 있으면 비로그인으로 전체 스펙이 읽힌다. 개발 프로파일에서는 그대로 켜 둔다 |
 
 ---
 

@@ -104,7 +104,7 @@ public class UserController {
      * @return 발송 완료 메시지를 포함하는 응답.
      */
     @PostMapping("/verify-email")
-    @Operation(summary = "이메일 인증 코드 발송", description = "로그인한 사용자의 가입 이메일로 인증 코드를 발송합니다. 재발송 시 이전 코드는 무효가 됩니다.")
+    @Operation(summary = "이메일 인증 코드 발송", description = "로그인한 사용자의 가입 이메일로 인증 코드를 발송합니다. 재발송 시 이전 코드는 무효가 됩니다. 쿨다운 중이면 429(EMAIL_VERIFICATION_COOLDOWN)와 함께 남은 초를 retryAfterSeconds로 반환합니다.")
     public ResponseEntity<ApiResponse<Void>> sendEmailVerification(@AuthenticationPrincipal CustomUserDetails userDetails) {
 
         userService.sendEmailVerification(userDetails.getId());
@@ -122,7 +122,7 @@ public class UserController {
      * @return 인증 완료 메시지를 포함하는 응답.
      */
     @PostMapping("/verify-email/confirm")
-    @Operation(summary = "이메일 인증 코드 확인", description = "발송된 인증 코드를 확인하고 이메일 인증을 완료합니다.")
+    @Operation(summary = "이메일 인증 코드 확인", description = "발송된 인증 코드를 확인하고 이메일 인증을 완료합니다. 오입력이 5회를 넘으면 해당 코드는 무효가 되고 429(TOO_MANY_VERIFICATION_ATTEMPTS)를 반환합니다.")
     public ResponseEntity<ApiResponse<Void>> confirmEmailVerification(@AuthenticationPrincipal CustomUserDetails userDetails,
                                                                       @Valid @RequestBody EmailVerifyRequest verifyRequest) {
 

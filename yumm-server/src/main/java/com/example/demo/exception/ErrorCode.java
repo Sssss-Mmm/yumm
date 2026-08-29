@@ -48,7 +48,16 @@ public enum ErrorCode {
     // 이름이 그대로 응답 JSON의 error 값이 된다(GlobalExceptionHandler). 웹이 이 문자열로 인증 창을 띄우므로 바꾸지 않는다.
     EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN, "매칭 신청 전에 이메일 인증이 필요합니다."),
 
-    INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "인증 코드가 올바르지 않거나 만료되었습니다.");
+    INVALID_VERIFICATION_CODE(HttpStatus.BAD_REQUEST, "인증 코드가 올바르지 않거나 만료되었습니다."),
+
+    // 아래 3개는 남용 방지(FR-S-07/08). 429는 "지금은 안 되지만 기다리면 된다"를 뜻하므로
+    // 클라이언트가 재시도 시점을 판단할 수 있다. 응답의 retryAfterSeconds가 그 대기 시간이다.
+    TOO_MANY_VERIFICATION_ATTEMPTS(HttpStatus.TOO_MANY_REQUESTS, "인증 시도 횟수를 초과했습니다. 코드를 다시 받아 주세요."),
+
+    EMAIL_VERIFICATION_COOLDOWN(HttpStatus.TOO_MANY_REQUESTS, "인증 메일을 다시 보내려면 잠시 기다려 주세요."),
+
+    // 계정 존재 여부를 흘리지 않도록 없는 이메일로 시도해도 같은 문구가 나간다(NFR-05).
+    TOO_MANY_LOGIN_ATTEMPTS(HttpStatus.TOO_MANY_REQUESTS, "로그인 시도가 너무 많습니다. 잠시 후 다시 시도해 주세요.");
 
     
 

@@ -15,6 +15,7 @@ import com.example.demo.domain.UserRole;
 import com.example.demo.domain.Gender;
 import org.springframework.stereotype.Service;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
@@ -38,6 +39,16 @@ public class UserServiceImpl implements UserService {
     private static final String VERIFY_SUBJECT = "[yumm] 이메일 인증 코드";
     // 예측 가능한 코드는 남의 계정을 인증해 줄 수 있으므로 Random이 아니라 SecureRandom을 쓴다.
     private static final SecureRandom CODE_RANDOM = new SecureRandom();
+
+    /**
+     * 인증 코드 오입력 허용 횟수(FR-S-07).
+     *
+     * 코드는 6자리 숫자(경우의 수 1,000,000)다. 5회를 허용하면 코드 하나를 맞힐 확률은
+     * 5/1,000,000 = 0.0005%이고, 임계를 넘기면 코드를 버리므로 이어서 대입할 수 없다.
+     * 새 코드는 재발송 쿨다운(60초)을 거쳐야 나오므로 시도 속도는 분당 5회로 묶인다.
+     * 사람이 오타 두세 번 낼 여지는 남기는 선이라 5로 잡았다.
+     */
+    private static final int MAX_VERIFY_ATTEMPTS = 5;
     
     /** 회원 가입 */
     @Override
@@ -229,13 +240,30 @@ public class UserServiceImpl implements UserService {
      *
      * 코드는 Redis에 사용자당 한 개만 두고 TTL로 만료시킨다. 재발송은 같은 키를 덮으므로
      * 이전 코드는 그 순간 무효가 된다. 코드와 이메일 주소는 로그에 남기지 않는다(NFR-05).
+     *
+     * 재발송에는 쿨다운을 건다(FR-S-08). 반복 호출은 SMTP 발신 쿼터를 태우고, 쿼터가 마르면
+     * EmailServiceImpl이 실패를 삼키므로 매칭 알림(FR-N-01/02/04)까지 조용히 전부 멈춘다.
+     *
+     * 트랜잭션 밖에서 돈다(NOT_SUPPORTED). 여기서 DB에 쓰는 것은 없는데 SMTP 왕복이 최대 5초라
+     * 클래스 레벨 @Transactional을 그대로 두면 커넥션 하나를 그 시간만큼 붙들고 있게 된다.
      */
     @Override
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public void sendEmailVerification(Long userId) {
+        long wait = jwtRedisService.getEmailResendCooldownSeconds(userId);
+        if (wait > 0) {
+            throw new CustomException(ErrorCode.EMAIL_VERIFICATION_COOLDOWN, wait);
+        }
+
         User user = findUserByIdOrThrow(userId);
 
         String code = String.format("%06d", CODE_RANDOM.nextInt(1_000_000));
         jwtRedisService.saveEmailVerificationCode(userId, code);
+        // 새 코드에는 시도 횟수를 새로 준다. 안 지우면 이전 코드의 실패가 남아
+        // 새로 받은 코드를 한 번도 못 넣어보고 막힌다.
+        jwtRedisService.clearEmailVerifyFailCount(userId);
+        // 쿨다운은 발송 전에 건다. 발송 뒤에 걸면 SMTP가 느린 5초 동안 들어온 요청이 전부 통과한다.
+        jwtRedisService.startEmailResendCooldown(userId);
 
         emailService.send(user.getEmail(), VERIFY_SUBJECT, verificationBody(code));
     }
@@ -251,6 +279,15 @@ public class UserServiceImpl implements UserService {
     public void confirmEmailVerification(Long userId, String code) {
         String issued = jwtRedisService.getEmailVerificationCode(userId);
         if (issued == null || code == null || !issued.equals(code.trim())) {
+            // 살아 있는 코드에 대한 실패만 센다. 코드가 없는 상태의 시도는 셀 대상이 없다.
+            if (issued != null && jwtRedisService.increaseEmailVerifyFailCount(userId) >= MAX_VERIFY_ATTEMPTS) {
+                // 임계를 넘으면 코드를 버린다. 남은 TTL 동안 대입을 이어갈 수 없고,
+                // 새 코드는 재발송 쿨다운을 거쳐야 나온다. 카운터도 같이 지워 새 코드가 즉시 막히지 않게 한다.
+                jwtRedisService.deleteEmailVerificationCode(userId);
+                jwtRedisService.clearEmailVerifyFailCount(userId);
+                throw new CustomException(ErrorCode.TOO_MANY_VERIFICATION_ATTEMPTS,
+                        jwtRedisService.getEmailResendCooldownSeconds(userId));
+            }
             throw new CustomException(ErrorCode.INVALID_VERIFICATION_CODE);
         }
 
@@ -258,6 +295,7 @@ public class UserServiceImpl implements UserService {
 
         // 같은 코드를 다시 쓰지 못하게 성공 직후 지운다.
         jwtRedisService.deleteEmailVerificationCode(userId);
+        jwtRedisService.clearEmailVerifyFailCount(userId);
     }
 
 

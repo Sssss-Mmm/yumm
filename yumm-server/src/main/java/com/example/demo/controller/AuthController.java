@@ -8,6 +8,7 @@ import org.springframework.web.bind.annotation.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.servlet.http.HttpServletRequest;
 
 
 /**
@@ -26,14 +27,18 @@ public class AuthController {
      * 사용자 로그인 API.
      * 아이디(이메일)와 비밀번호를 통해 사용자를 인증하고, Access Token과 Refresh Token을 발급합니다.
      *
-     * @param request 로그인 요청에 필요한 아이디(이메일)와 비밀번호를 담은 DTO
+     * @param loginRequest 로그인 요청에 필요한 아이디(이메일)와 비밀번호를 담은 DTO
+     * @param request      요청 출처 IP를 얻기 위한 서블릿 요청. 로그인 시도 제한(FR-S-07)의 카운터 키에 쓰인다.
      * @return 로그인 성공 시 발급된 Access Token 및 Refresh Token 정보를 포함하는 응답
      */
     @PostMapping("/login")
-    @Operation(summary = "사용자 로그인", description = "아이디/비밀번호를 통해 로그인하고 JWT를 반환합니다.")
-    public ResponseEntity<ApiResponse<AuthResponseDto>> login(@RequestBody LoginRequest loginRequest) {
+    @Operation(summary = "사용자 로그인", description = "아이디/비밀번호를 통해 로그인하고 JWT를 반환합니다. 연속 실패가 임계를 넘으면 429로 막고 남은 시간을 retryAfterSeconds로 알려줍니다.")
+    public ResponseEntity<ApiResponse<AuthResponseDto>> login(@RequestBody LoginRequest loginRequest,
+                                                              HttpServletRequest request) {
 
-        AuthResponseDto response = authService.login(loginRequest);
+        // 리버스 프록시 뒤에 두면 getRemoteAddr()가 프록시 IP가 되어 카운터가 모두에게 공유된다.
+        // 그때는 server.forward-headers-strategy=framework를 켜서 실제 출처가 들어오게 해야 한다.
+        AuthResponseDto response = authService.login(loginRequest, request.getRemoteAddr());
 
         return ApiResponse.ok("로그인 성공", response);
     }

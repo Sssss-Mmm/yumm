@@ -126,7 +126,7 @@ class UserWithdrawTest {
                 .password("whatever1234")
                 .build();
 
-        assertThatThrownBy(() -> authService.login(request))
+        assertThatThrownBy(() -> authService.login(request, "10.0.0.1"))
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.WITHDRAWN_ACCOUNT);
     }

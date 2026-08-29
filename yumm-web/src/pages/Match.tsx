@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ApiError, api, blockUser, confirmEmailCode, leaveGroup, myUserId, reportUser, sendEmailCode } from "../api";
+import {
+  ApiError, api, blockUser, confirmEmailCode, getMatchStatus, leaveGroup, myUserId, reportUser, sendEmailCode,
+  type MatchMember as Member, type MatchStatus,
+} from "../api";
 import { btn, btnGhost, btnSm, card, h1, input, label, muted } from "../ui";
 
 // 서버 Region enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
@@ -24,16 +27,8 @@ const REPORT_REASONS = {
   OTHER: "기타",
 };
 
-type Member = { userId: number; nickname: string; profileImageUrl: string | null };
-type Status = {
-  status: "WAITING" | "MATCHED" | "CANCELLED" | "TIMEOUT";
-  groupId: string | null;
-  region: keyof typeof REGIONS;
-  mealDate: string;
-  mealTime: keyof typeof MEAL_TIMES;
-  expiresAt: string;
-  members: Member[];
-};
+// 서버 응답 그대로에 이 화면이 쓰는 라벨 키만 좁혀 붙인다.
+type Status = MatchStatus & { region: keyof typeof REGIONS; mealTime: keyof typeof MEAL_TIMES };
 
 // 인증 때문에 신청이 막히면 이 값을 들고 있다가 인증 성공 후 그대로 다시 보낸다.
 type ApplyPayload = {
@@ -87,7 +82,7 @@ const Match = () => {
   // 신청 이력이 없으면 서버가 404를 준다. 그건 에러가 아니라 "신청 폼을 보여줄 때"라는 뜻.
   // 상태값은 늘지 않는다 → 해체는 MATCHED에서 WAITING + groupId null로 되돌아온 것으로 감지한다.
   const load = () =>
-    api<Status>("/match")
+    getMatchStatus<Status>()
       .then((next) => {
         if (prev.current === "MATCHED" && next.status === "WAITING" && next.groupId === null) {
           setDisbanded(true);

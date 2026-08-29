@@ -108,6 +108,28 @@ export type SignupRequest = {
 };
 export const signup = (body: SignupRequest) => api<void>("/user/signup", "POST", body);
 
+export type MatchMember = { userId: number; nickname: string; profileImageUrl: string | null };
+
+/**
+ * GET /api/match 응답. 신청 이력이 없으면 서버가 404 → api()가 ApiError를 던진다.
+ * region/mealTime은 서버 enum 이름(GANGNAM, LUNCH …) 그대로다.
+ */
+export type MatchStatus = {
+  status: "WAITING" | "MATCHED" | "CANCELLED" | "TIMEOUT";
+  groupId: string | null;
+  region: string;
+  mealDate: string;
+  mealTime: string;
+  expiresAt: string;
+  members: MatchMember[];
+};
+
+/**
+ * 내 매칭 현황. 매칭 화면과 채팅 화면이 같은 응답으로 그룹 해체를 감지한다(FR-C-04).
+ * 화면이 region/mealTime을 좁힌 타입으로 쓰면 T로 넘긴다.
+ */
+export const getMatchStatus = <T extends MatchStatus = MatchStatus>() => api<T>("/match");
+
 /** 매칭된 그룹에서 이탈한다. 남은 인원은 서버가 다시 WAITING으로 되돌린다. */
 export const leaveGroup = () => api<void>("/match/group", "DELETE");
 

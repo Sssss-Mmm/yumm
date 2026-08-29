@@ -15,10 +15,13 @@ public interface AuthService {
     /**
      * 사용자를 인증하고 Access Token 및 Refresh Token을 발급합니다.
      *
-     * @param request 로그인 요청에 필요한 사용자 이메일과 비밀번호를 담은 DTO.
+     * 연속 실패는 (요청 출처 IP + 이메일) 조합 단위로 제한한다(FR-S-07).
+     *
+     * @param loginRequest 로그인 요청에 필요한 사용자 이메일과 비밀번호를 담은 DTO.
+     * @param clientIp     요청 출처 IP. 실패 카운터 키의 일부다.
      * @return 로그인 성공 시 발급된 Access Token과 Refresh Token 정보를 담은 DTO.
      */
-    AuthResponseDto login(LoginRequest loginRequest);
+    AuthResponseDto login(LoginRequest loginRequest, String clientIp);
 
         
     /**

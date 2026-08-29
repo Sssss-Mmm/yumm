@@ -86,6 +86,28 @@ cd yumm-web && npm run build     # tsc -b + vite build
 DB_URL=jdbc:postgresql://localhost:5432/demo_db JWT_SECRET=$(openssl rand -base64 32) ./mvnw test
 ```
 
+### 리버스 프록시 뒤에 배포할 때 (로그인 시도 제한)
+
+로그인 시도 제한(FR-S-07)은 카운터 키를 **출처 IP + 이메일 해시**로 잡는다. IP를 섞는 이유는
+잠금이 공격 수단이 되지 않게 하기 위해서다 — 남의 이메일로 일부러 실패시켜도 피해자 IP의
+카운터는 깨끗해 본인은 그대로 로그인된다.
+
+**그런데 리버스 프록시(nginx, ALB 등) 뒤에 두면 이 설계가 무너진다.** `getRemoteAddr()`가
+전부 프록시 IP를 반환하므로 모든 사용자가 카운터 하나를 공유하고, 잠금이 사실상 계정 단위로
+퇴화한다. 즉 막으려던 그 공격이 다시 가능해진다.
+
+프록시를 쓴다면 운영 설정에 다음을 켜라.
+
+```properties
+server.forward-headers-strategy=framework
+```
+
+**단, 프록시가 `X-Forwarded-For`를 덮어쓰도록 설정된 뒤에 켜라.** 클라이언트가 보낸 헤더를
+그대로 통과시키는 상태에서 켜면 IP를 위조해 제한을 무력화할 수 있다. 신뢰 경계를 모르는
+상태에서 기본값으로 켜지 않은 이유가 이것이다.
+
+프록시 없이 단일 인스턴스로 띄운다면 그대로 두면 된다.
+
 ### 기존 DB에 배포하기 전 (수동 마이그레이션)
 
 `ddl-auto=update`는 컬럼을 지우지도 `NOT NULL`을 풀지도 않고, 기존 컬럼 **값**도 손대지 않는다.

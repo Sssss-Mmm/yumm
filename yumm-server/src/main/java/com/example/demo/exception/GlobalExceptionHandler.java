@@ -20,6 +20,11 @@ public class GlobalExceptionHandler {
         Map<String, Object> body = new HashMap<>();
         body.put("error", e.getErrorCode().name());
         body.put("message", e.getMessage());
+        // 쿨다운·잠금(429)은 남은 초를 같이 내려보낸다. 없으면 화면이 언제 다시 눌러도 되는지 알 수 없어
+        // 사용자가 계속 눌러 보게 되고, 그게 정확히 이 제한이 막으려던 트래픽이다.
+        if (e.getRetryAfterSeconds() != null) {
+            body.put("retryAfterSeconds", e.getRetryAfterSeconds());
+        }
         return ResponseEntity.status(e.getErrorCode().getStatus()).body(body);
     }
 
