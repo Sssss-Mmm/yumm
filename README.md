@@ -84,7 +84,7 @@
 cd yumm-server && ./mvnw test
 ```
 
-`DemoApplicationTests.contextLoads`는 실행 중인 PostgreSQL이 필요해서 DB 없이는 실패한다. 나머지는 DB 없이 통과한다.
+DB 없이 전부 통과한다. `DemoApplicationTests.contextLoads`만 실행 중인 PostgreSQL이 필요해서 `DB_URL`이 설정됐을 때만 켜진다 — [실행법](docs/development.md#빌드와-테스트).
 
 ## 현재 상태
 

@@ -35,6 +35,13 @@ cd yumm-server && ./mvnw test    # 테스트
 cd yumm-web && npm run build     # tsc -b + vite build
 ```
 
+`DemoApplicationTests.contextLoads`는 실행 중인 PostgreSQL이 필요해서 기본으로는 스킵된다.
+스프링 컨텍스트가 실제로 부팅되는지 보는 유일한 테스트라 **배포 전에 한 번은 돌린다.**
+
+```bash
+DB_URL=jdbc:postgresql://localhost:5432/demo_db ./mvnw test
+```
+
 ### 기존 DB에 배포하기 전 (수동 마이그레이션)
 
 `ddl-auto=update`는 컬럼을 지우지도 `NOT NULL`을 풀지도 않고, 기존 컬럼 **값**도 손대지 않는다.
