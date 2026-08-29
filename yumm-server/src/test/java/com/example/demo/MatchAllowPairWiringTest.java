@@ -12,6 +12,9 @@ import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.impl.MatchServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.json.JsonMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -37,6 +40,9 @@ import static org.mockito.Mockito.when;
  * 테스트는 전부 통과한다. {@code Candidate}가 record 위치 인자라 조용히 어긋날 수 있는 자리다.
  */
 class MatchAllowPairWiringTest {
+
+    /** 요청 본문을 DTO로 푸는 데만 쓴다. allowPair의 JSON 키가 바뀌면 여기서 먼저 깨진다. */
+    private static final ObjectMapper MAPPER = JsonMapper.builder().addModule(new JavaTimeModule()).build();
 
     private static final Long USER_ID = 7L;
     private static final LocalDate TODAY = LocalDate.now();
@@ -82,6 +88,29 @@ class MatchAllowPairWiringTest {
     @DisplayName("고르지 않으면 false로 저장된다 (기본값 미선택)")
     void 미선택이_기본이다() {
         assertThat(savedAllowPair(false)).isFalse();
+    }
+
+    /**
+     * 목이 아니라 실제 요청 본문에서 시작한다. 위 두 테스트는 {@code MatchApplyRequest}를 목으로 두므로
+     * DTO 필드명이 바뀌어도(=클라이언트가 보내는 {@code allowPair} 키가 안 붙어도) 통과한다.
+     * POST /api/match의 본문 → DTO → 저장되는 {@code MatchRequest}까지가 이 테스트의 범위다.
+     * 컨트롤러는 서비스로 그대로 넘기기만 해서 스프링 컨텍스트 없이 본문 역직렬화로 대신한다.
+     */
+    @Test
+    @DisplayName("요청 본문의 allowPair가 저장되는 MatchRequest까지 도달한다")
+    void 요청_본문에서_저장까지_전달된다() throws Exception {
+        String body = """
+                {"region":"GANGNAM","mealDate":"%s","mealTime":"LUNCH","genderPreference":"ANY",
+                 "foodPreferences":["KOREAN"],"allowPair":true}
+                """.formatted(TODAY);
+
+        service.apply(USER_ID, MAPPER.readValue(body, MatchApplyRequest.class));
+
+        ArgumentCaptor<MatchRequest> saved = ArgumentCaptor.forClass(MatchRequest.class);
+        verify(matchRequestRepository).save(saved.capture());
+        assertThat(saved.getValue().isAllowPair()).isTrue();
+        // 본문이 실제로 바인딩됐는지(전 필드가 null인 채 통과하는 것 방지)
+        assertThat(saved.getValue().getRegion()).isEqualTo(Region.GANGNAM);
     }
 
     /**
