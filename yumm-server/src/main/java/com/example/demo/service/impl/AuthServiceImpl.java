@@ -38,6 +38,13 @@ public class AuthServiceImpl implements AuthService {
         User user = userRepository.findByEmail(email)
             .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
 
+        // 탈퇴한 계정은 비밀번호가 익명화 값으로 덮여 있어 어차피 검증을 통과하지 못한다.
+        // INVALID_CREDENTIALS로 흘려보내면 본인이 탈퇴한 사실을 모른 채 비밀번호만 다시 시도하게 되므로
+        // 여기서 명시적으로 끊는다(FR-A-08).
+        if (user.isWithdrawn()) {
+            throw new CustomException(ErrorCode.WITHDRAWN_ACCOUNT);
+        }
+
         // 비밀번호 검증
         if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);

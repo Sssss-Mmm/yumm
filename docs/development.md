@@ -163,3 +163,30 @@ DELETE FROM match_requests
 COMMIT;
 ```
 
+**4) `users` — `withdrawn_at` 컬럼 추가 (탈퇴 익명화)**
+
+회원 탈퇴를 하드 삭제에서 익명화로 바꿨다(FR-A-08). 신고·차단·채팅·매칭 신청이 `users` 행을
+NOT NULL FK로 물고 있어 삭제가 FK 위반으로 실패했고, 성공했다면 보존하기로 한 신고 이력까지
+사라진다(`docs/privacy-policy.md` 5절). nullable 컬럼이라 `ddl-auto=update`가 알아서 추가하지만,
+배포 전에 확인해 두면 첫 탈퇴 요청에서 놀랄 일이 없다.
+
+```sql
+BEGIN;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS withdrawn_at timestamp;
+COMMIT;
+
+-- 확인. 기존 행은 전부 NULL(= 정상 계정)이어야 한다.
+SELECT count(*) FROM users WHERE withdrawn_at IS NOT NULL;
+```
+
+`NULL`이 정상 계정이고 값이 있으면 탈퇴 계정이다. 백필할 값이 없다 — 이전 버전에서 탈퇴한
+계정은 이미 행째로 사라졌으므로 되살릴 수 없다.
+
+탈퇴 계정은 이메일이 `withdrawn-{id}@yumm.invalid`로 덮이고 닉네임·비밀번호·프로필 이미지가
+지워진다. 원래 이메일은 비므로 같은 주소로 다시 가입할 수 있다.
+
+```sql
+-- 운영 중 확인용: 탈퇴 계정 목록
+SELECT id, email, nickname, withdrawn_at FROM users WHERE withdrawn_at IS NOT NULL;
+```
+

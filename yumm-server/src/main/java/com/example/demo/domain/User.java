@@ -16,6 +16,9 @@ import java.time.LocalDateTime;
 @Builder 
 public class User {
 
+    // BCrypt 해시 형식이 아니므로 passwordEncoder.matches()가 어떤 입력에도 false를 반환한다
+    private static final String WITHDRAWN_PASSWORD = "(withdrawn)";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id; // 회원 고유 식별 번호 (auto-incremental)
@@ -46,6 +49,9 @@ public class User {
     // 기존 가입자에게는 받은 기록이 없으므로 nullable로 둔다. NULL = 동의 기록 없음.
     private LocalDateTime termsAgreedAt; // 이용약관 동의 시각(가입 시점)
 
+    // 탈퇴 시각. NULL = 정상 계정. 행 자체는 남긴다(FR-A-08).
+    private LocalDateTime withdrawnAt;
+
 
 
     public void updateProfile(String nickname, String profileImageUrl) {
@@ -61,6 +67,25 @@ public class User {
             throw new IllegalArgumentException("새 비밀번호를 입력해 주세요.");
         }
         this.password = newHashedPassword;
+    }
+
+    /**
+     * 회원 탈퇴(FR-A-08). 행을 지우는 대신 개인정보만 지운다.
+     *
+     * 신고·차단·채팅·매칭 신청이 이 행을 NOT NULL FK로 물고 있어 하드 삭제는 FK 위반으로 실패하고,
+     * 성공한다 해도 탈퇴로 신고 이력을 지울 수 있게 되어 신고 제도가 무력해진다(개인정보처리방침 5절).
+     * 이메일에는 유니크 제약이 있으므로 id를 섞어 유일한 값으로 덮는다. 원래 이메일은 비므로 재가입할 수 있다.
+     */
+    public void withdraw(LocalDateTime at) {
+        this.email = "withdrawn-" + id + "@yumm.invalid";
+        this.password = WITHDRAWN_PASSWORD; // NOT NULL이라 비울 수 없다. 어떤 비밀번호와도 매칭되지 않는 값으로 덮는다
+        this.nickname = "탈퇴한 사용자";
+        this.profileImageUrl = null;
+        this.withdrawnAt = at;
+    }
+
+    public boolean isWithdrawn() {
+        return withdrawnAt != null;
     }
 
     public void updateEmail(String newEmail) {

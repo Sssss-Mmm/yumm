@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { signup } from "../api";
 import { btn, card, h1, input, label } from "../ui";
 
@@ -48,18 +48,29 @@ const Registration = () => {
           <input name="birthYear" type="number" required min={maxBirthYear - 80} max={maxBirthYear} placeholder="예: 1998" className={input} />
         </label>
 
-        <label className="flex items-start gap-2.5 rounded-xl bg-stone-50 p-3 text-sm text-stone-700">
+        {/* ponytail: label로 감싸면 안의 링크를 눌러도 체크박스가 토글된다.
+            그래서 label 대신 aria-label로 이름만 주고 문구는 밖에 둔다.
+            문서는 새 탭으로 연다. 같은 탭에서 이동하면 입력하던 폼이 날아간다. */}
+        <div className="flex items-start gap-2.5 rounded-xl bg-stone-50 p-3 text-sm leading-relaxed text-stone-700">
           <input
             type="checkbox"
             checked={agreed}
             onChange={(e) => setAgreed(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-orange-600"
+            aria-label="이용약관 및 개인정보 처리방침에 동의합니다."
+            className="mt-1 h-4 w-4 shrink-0 accent-orange-600"
           />
-          <span>
+          <p className="break-keep">
             <span className="font-medium text-orange-700">[필수]</span>{" "}
-            이용약관 및 개인정보 처리방침에 동의합니다.
-          </span>
-        </label>
+            <Link to="/terms" target="_blank" rel="noreferrer" className="font-medium text-orange-600 underline">
+              이용약관
+            </Link>{" "}
+            및{" "}
+            <Link to="/privacy" target="_blank" rel="noreferrer" className="font-medium text-orange-600 underline">
+              개인정보 처리방침
+            </Link>
+            에 동의합니다.
+          </p>
+        </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
         <button disabled={!agreed} className={btn}>가입하기</button>

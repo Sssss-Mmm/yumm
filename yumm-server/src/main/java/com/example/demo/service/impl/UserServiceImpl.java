@@ -7,6 +7,9 @@ import com.example.demo.dto.users.*;
 import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
 import com.example.demo.service.JwtRedisService;
+import com.example.demo.service.MatchService;
+import com.example.demo.domain.MatchStatus;
+import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.domain.UserRole;
 import com.example.demo.domain.Gender;
 import org.springframework.stereotype.Service;
@@ -26,6 +29,8 @@ public class UserServiceImpl implements UserService {
     private final UserRepository  userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtRedisService jwtRedisService;
+    private final MatchRequestRepository matchRequestRepository;
+    private final MatchService matchService;
     
     /** 회원 가입 */
     @Override
@@ -184,7 +189,13 @@ public class UserServiceImpl implements UserService {
     }
 
 
-    /** 회원 탈퇴 */
+    /**
+     * 회원 탈퇴(FR-A-08).
+     *
+     * 행을 지우지 않고 익명화한다. 신고·차단·채팅·매칭 신청이 이 행을 NOT NULL FK로 물고 있어
+     * 하드 삭제는 FK 위반으로 실패하고, 성공하더라도 방침이 보존하기로 한 신고 이력까지 사라진다
+     * (개인정보처리방침 5절).
+     */
     @Override
     public void withdraw(Long userId) {
         // 해당 사용자의 모든 토큰 삭제 (Redis에서 Refresh Token 삭제 및 Access Token 블랙리스트 추가)
@@ -196,8 +207,11 @@ public class UserServiceImpl implements UserService {
         // 회원 탈퇴 시, 캐싱된 유저 데이터 모두 삭제
         jwtRedisService.deleteAllUserCache(userId);
 
-        // 사용자 엔티티 DB에서 삭제
-        userRepository.delete(user);
+        // 진행 중인 매칭 정리. 탈퇴자를 그룹에 남기면 없는 사람과의 약속이 성사된 것처럼 보인다.
+        clearOngoingMatch(userId);
+
+        // 개인정보만 지우고 행은 남긴다
+        user.withdraw(LocalDateTime.now());
     }
 
 
@@ -216,6 +230,25 @@ public class UserServiceImpl implements UserService {
 // =====================================================
 // Helper Methods
 // =====================================================
+
+    /**
+     * 탈퇴자의 진행 중인 매칭 신청을 정리한다.
+     *
+     * 매칭된 상태면 그룹 이탈(FR-C-02)을 그대로 태운다 — 최소 인원 미달 시 해체와 대기열 복귀(FR-C-03)가
+     * 거기 딸려 있어 탈퇴용 경로를 따로 만들 이유가 없다. 대기 중이면 신청 취소만 하면 된다.
+     * 두 서비스 메서드가 상태에 맞지 않으면 예외를 던지므로 상태를 먼저 보고 갈래를 정한다.
+     */
+    private void clearOngoingMatch(Long userId) {
+        matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(userId)
+                .map(m -> m.getStatus())
+                .ifPresent(status -> {
+                    if (status == MatchStatus.MATCHED) {
+                        matchService.leaveGroup(userId);
+                    } else if (status == MatchStatus.WAITING) {
+                        matchService.cancel(userId);
+                    }
+                });
+    }
 
     /**
      * 사용자 조회 및 예외 처리
