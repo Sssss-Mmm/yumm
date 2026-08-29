@@ -84,7 +84,7 @@
 cd yumm-server && ./mvnw test
 ```
 
-DB 없이 전부 통과한다. `DemoApplicationTests.contextLoads`만 실행 중인 PostgreSQL이 필요해서 `DB_URL`이 설정됐을 때만 켜진다 — [실행법](docs/development.md#빌드와-테스트).
+DB 없이 전부 통과한다. `DemoApplicationTests.contextLoads`만 PostgreSQL과 `JWT_SECRET`이 필요해서 둘 다 설정됐을 때만 켜진다 — [실행법](docs/development.md#빌드와-테스트).
 
 ## 현재 상태
 

@@ -9,8 +9,8 @@ PostgreSQL과 Redis가 필요하다.
 **Java 17이 필요하다.** 더 높은 JDK가 기본이면 `JAVA_HOME`을 17로 지정해야 빌드된다.
 
 ```bash
-# 서버 (8080)
-cd yumm-server && ./mvnw spring-boot:run
+# 서버 (8080) — JWT_SECRET 없으면 기동 실패한다. 아래 「환경변수」 참조
+cd yumm-server && JWT_SECRET=$(openssl rand -base64 32) ./mvnw spring-boot:run
 
 # 웹 (5173)
 cd yumm-web && npm install && npm run dev
@@ -18,10 +18,21 @@ cd yumm-web && npm install && npm run dev
 
 웹 개발 서버가 `/api`와 `/ws`를 8080으로 프록시한다. 그래서 CORS 설정이 아예 없다.
 
-접속 정보는 환경변수로 덮어쓴다. 괄호 안이 기본값이다.
+### 환경변수
+
+**`JWT_SECRET`은 기본값이 없다. 설정하지 않으면 서버가 기동하지 않는다**
+(`PlaceholderResolutionException: Could not resolve placeholder 'JWT_SECRET'`).
+토큰 서명 키에 기본값을 두면 그 값이 그대로 운영까지 따라가므로 일부러 비워뒀다. 직접 만들어 쓴다.
+
+```bash
+export JWT_SECRET=$(openssl rand -base64 32)   # HS256, 256비트
+```
+
+나머지는 기본값이 있어서 로컬에서는 그대로 두면 된다.
 
 | 변수 | 기본값 |
 |---|---|
+| `JWT_SECRET` | **없음 — 필수** |
 | `DB_URL` | `jdbc:postgresql://localhost:5432/demo_db` |
 | `DB_USERNAME` / `DB_PASSWORD` | `demo_user` / `demo_pass` |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `localhost` / `6379` / (없음) |
@@ -39,7 +50,7 @@ cd yumm-web && npm run build     # tsc -b + vite build
 스프링 컨텍스트가 실제로 부팅되는지 보는 유일한 테스트라 **배포 전에 한 번은 돌린다.**
 
 ```bash
-DB_URL=jdbc:postgresql://localhost:5432/demo_db ./mvnw test
+DB_URL=jdbc:postgresql://localhost:5432/demo_db JWT_SECRET=$(openssl rand -base64 32) ./mvnw test
 ```
 
 ### 기존 DB에 배포하기 전 (수동 마이그레이션)
