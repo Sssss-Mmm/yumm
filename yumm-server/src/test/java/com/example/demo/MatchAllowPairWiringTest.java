@@ -12,6 +12,7 @@ import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.EmailService;
+import com.example.demo.security.StompSubscriptionRevoker;
 import com.example.demo.service.impl.MatchServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -57,10 +58,11 @@ class MatchAllowPairWiringTest {
         matchRequestRepository = mock(MatchRequestRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
         userBlockRepository = mock(UserBlockRepository.class);
-        service = new MatchServiceImpl(matchRequestRepository, userRepository, userBlockRepository, mock(EmailService.class));
+        service = new MatchServiceImpl(matchRequestRepository, userRepository, userBlockRepository, mock(EmailService.class), mock(StompSubscriptionRevoker.class));
 
         when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(
-                User.builder().id(USER_ID).nickname("서연").gender(Gender.FEMALE).build()));
+                User.builder().id(USER_ID).nickname("서연").gender(Gender.FEMALE)
+                        .emailVerifiedAt(LocalDateTime.now()).build()));
         when(matchRequestRepository.save(any(MatchRequest.class))).thenAnswer(inv -> inv.getArgument(0));
         when(matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(USER_ID)).thenReturn(Optional.empty());
     }

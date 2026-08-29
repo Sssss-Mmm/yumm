@@ -7,6 +7,7 @@ import com.example.demo.dto.users.SignupRequest;
 import jakarta.validation.Valid;
 import com.example.demo.dto.users.EmailResponse;
 import com.example.demo.dto.users.EmailUpdateRequest;
+import com.example.demo.dto.users.EmailVerifyRequest;
 import com.example.demo.dto.users.ProfileResponse;
 import com.example.demo.dto.users.ProfileUpdateRequest;
 import com.example.demo.dto.users.UserInfoDetailsResponse;
@@ -90,6 +91,42 @@ public class UserController {
         EmailResponse emailResponse = userService.updateEmail(userDetails.getId(), updateRequest);
 
         return ApiResponse.ok("이메일이 성공적으로 변경되었습니다.", emailResponse);
+    }
+
+
+    /**
+     * 이메일 인증 코드 발송 API (FR-A-03).
+     * 로그인한 사용자의 가입 이메일로 인증 코드를 보냅니다. 재발송하면 이전 코드는 무효가 됩니다.
+     *
+     * @param userDetails 현재 인증된 사용자의 CustomUserDetails 객체에서 ID를 추출하기 위함.
+     * @return 발송 완료 메시지를 포함하는 응답.
+     */
+    @PostMapping("/verify-email")
+    @Operation(summary = "이메일 인증 코드 발송", description = "로그인한 사용자의 가입 이메일로 인증 코드를 발송합니다. 재발송 시 이전 코드는 무효가 됩니다.")
+    public ResponseEntity<ApiResponse<Void>> sendEmailVerification(@AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        userService.sendEmailVerification(userDetails.getId());
+
+        return ApiResponse.ok("인증 코드를 보냈습니다. 메일함을 확인해 주세요.");
+    }
+
+
+    /**
+     * 이메일 인증 코드 확인 API (FR-A-03).
+     * 발송된 코드를 검증하고 인증을 완료합니다. 인증을 마쳐야 매칭을 신청할 수 있습니다.
+     *
+     * @param userDetails 현재 인증된 사용자의 CustomUserDetails 객체에서 ID를 추출하기 위함.
+     * @param verifyRequest 사용자가 입력한 인증 코드를 담은 DTO.
+     * @return 인증 완료 메시지를 포함하는 응답.
+     */
+    @PostMapping("/verify-email/confirm")
+    @Operation(summary = "이메일 인증 코드 확인", description = "발송된 인증 코드를 확인하고 이메일 인증을 완료합니다.")
+    public ResponseEntity<ApiResponse<Void>> confirmEmailVerification(@AuthenticationPrincipal CustomUserDetails userDetails,
+                                                                      @Valid @RequestBody EmailVerifyRequest verifyRequest) {
+
+        userService.confirmEmailVerification(userDetails.getId(), verifyRequest.getCode());
+
+        return ApiResponse.ok("이메일 인증이 완료되었습니다.");
     }
 
 

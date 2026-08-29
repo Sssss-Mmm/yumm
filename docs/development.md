@@ -48,9 +48,19 @@ export JWT_SECRET=$(openssl rand -base64 32)   # HS256, 256비트
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | (비어 있음) |
 | `SMTP_FROM` | `no-reply@yumm.local` — 보통 `SMTP_USERNAME`과 같은 주소로 둔다 |
 
-**SMTP는 알림 메일(FR-N-01·02·04)용이다.** `SMTP_HOST`가 비어 있으면 `EmailServiceImpl`이 발송을
-건너뛰므로 로컬에서는 설정하지 않아도 매칭이 정상 동작한다. 발송이 실패해도 예외를 삼키고
-로그만 남긴다 — 알림은 부가 기능이라 매칭 편성 트랜잭션을 되돌리면 안 된다.
+**SMTP는 알림 메일(FR-N-01·02·04)과 이메일 인증 코드(FR-A-03)용이다.** `SMTP_HOST`가 비어 있으면
+`EmailServiceImpl`이 발송을 건너뛴다. 알림은 없어도 그만이지만 **인증 코드를 못 받으면 매칭 신청이
+`EMAIL_NOT_VERIFIED`로 계속 막힌다.** SMTP 없이 로컬에서 신청까지 보려면 코드를 Redis에서 직접 읽거나
+행에 인증 표시를 넣는다.
+
+```bash
+redis-cli get emailVerify:1                                    # 발송한 코드 확인
+psql -c "UPDATE users SET email_verified_at = now() WHERE id = 1;"   # 인증 건너뛰기
+```
+
+발송이 실패해도 예외를 삼키고
+로그만 남긴다 — 알림은 부가 기능이라 매칭 편성 트랜잭션을 되돌리면 안 된다. 인증 코드와 이메일 주소는
+로그에 남기지 않는다(NFR-05).
 
 **자격증명은 OS 환경변수로만 준다. 저장소에는 값을 넣지 않는다.** 키 목록은 `.env.example`에 있고,
 `.env`는 `.gitignore` 대상이다. 앱은 `.env`를 읽지 않으므로 셸에서 export 해야 한다.
@@ -213,3 +223,21 @@ SELECT count(*) FROM match_requests WHERE reminded_at IS NOT NULL;
 UPDATE match_requests SET reminded_at = now()
  WHERE status = 'MATCHED' AND meal_date = CURRENT_DATE;
 ```
+
+**6) `users` — `email_verified_at` 컬럼 추가 (매칭 신청 전 이메일 인증)**
+
+FR-A-03. nullable 컬럼이라 `ddl-auto=update`가 알아서 추가한다. **기존 가입자는 전부 NULL(=미인증)이 되어
+다음 매칭 신청에서 한 번 인증을 거친다** — 의도한 동작이다. 가입·로그인·프로필 수정은 그대로 된다.
+
+```sql
+BEGIN;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at timestamp;
+COMMIT;
+
+-- 확인. 기존 행은 전부 NULL(= 미인증)이어야 한다.
+SELECT count(*) FILTER (WHERE email_verified_at IS NULL) AS 미인증, count(*) AS 전체 FROM users;
+```
+
+`NULL`이면 미인증이고 값이 있으면 인증 시각이다. **백필하지 않는다** — 인증한 적 없는 주소를 인증 처리하면
+게이트를 켠 이유(차단 회원의 재가입 차단)가 사라진다. 인증 코드는 DB가 아니라 Redis(`emailVerify:{userId}`,
+TTL 10분)에 있으므로 마이그레이션 대상이 아니다.

@@ -6,6 +6,7 @@ import com.example.demo.repository.UserRepository;
 import com.example.demo.dto.users.*;
 import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
+import com.example.demo.service.EmailService;
 import com.example.demo.service.JwtRedisService;
 import com.example.demo.service.MatchService;
 import com.example.demo.domain.MatchStatus;
@@ -17,6 +18,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.Year;
 
@@ -31,6 +33,11 @@ public class UserServiceImpl implements UserService {
     private final JwtRedisService jwtRedisService;
     private final MatchRequestRepository matchRequestRepository;
     private final MatchService matchService;
+    private final EmailService emailService;
+
+    private static final String VERIFY_SUBJECT = "[yumm] 이메일 인증 코드";
+    // 예측 가능한 코드는 남의 계정을 인증해 줄 수 있으므로 Random이 아니라 SecureRandom을 쓴다.
+    private static final SecureRandom CODE_RANDOM = new SecureRandom();
     
     /** 회원 가입 */
     @Override
@@ -212,6 +219,55 @@ public class UserServiceImpl implements UserService {
 
         // 개인정보만 지우고 행은 남긴다
         user.withdraw(LocalDateTime.now());
+    }
+
+
+    /**
+     * 이메일 인증 코드 발송(FR-A-03).
+     *
+     * 코드는 Redis에 사용자당 한 개만 두고 TTL로 만료시킨다. 재발송은 같은 키를 덮으므로
+     * 이전 코드는 그 순간 무효가 된다. 코드와 이메일 주소는 로그에 남기지 않는다(NFR-05).
+     */
+    @Override
+    public void sendEmailVerification(Long userId) {
+        User user = findUserByIdOrThrow(userId);
+
+        String code = String.format("%06d", CODE_RANDOM.nextInt(1_000_000));
+        jwtRedisService.saveEmailVerificationCode(userId, code);
+
+        emailService.send(user.getEmail(), VERIFY_SUBJECT, verificationBody(code));
+    }
+
+
+    /**
+     * 이메일 인증 코드 확인(FR-A-03).
+     *
+     * 만료(키 없음)와 불일치를 같은 오류로 내린다 — 구분해서 알려주면 코드를 대입해 보는 쪽에
+     * "이 계정에 유효한 코드가 살아 있다"는 정보를 준다.
+     */
+    @Override
+    public void confirmEmailVerification(Long userId, String code) {
+        String issued = jwtRedisService.getEmailVerificationCode(userId);
+        if (issued == null || code == null || !issued.equals(code.trim())) {
+            throw new CustomException(ErrorCode.INVALID_VERIFICATION_CODE);
+        }
+
+        findUserByIdOrThrow(userId).verifyEmail(LocalDateTime.now());
+
+        // 같은 코드를 다시 쓰지 못하게 성공 직후 지운다.
+        jwtRedisService.deleteEmailVerificationCode(userId);
+    }
+
+
+    private static String verificationBody(String code) {
+        return """
+                yumm 이메일 인증 코드입니다.
+
+                인증 코드: %s
+
+                앱의 인증 창에 코드를 입력해 주세요. %d분 안에 입력해야 합니다.
+                요청한 적이 없다면 이 메일은 무시하셔도 됩니다.
+                """.formatted(code, JwtRedisService.EMAIL_VERIFY_TTL_MINUTES);
     }
 
 

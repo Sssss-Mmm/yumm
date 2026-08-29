@@ -12,6 +12,7 @@ import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.security.StompSubscriptionRevoker;
 import com.example.demo.service.EmailService;
 import com.example.demo.service.GroupMatcher;
 import com.example.demo.service.MatchService;
@@ -48,6 +49,7 @@ public class MatchServiceImpl implements MatchService {
     private final UserRepository userRepository;
     private final UserBlockRepository userBlockRepository;
     private final EmailService emailService;
+    private final StompSubscriptionRevoker stompSubscriptionRevoker;
 
     @Override
     @Transactional
@@ -57,6 +59,11 @@ public class MatchServiceImpl implements MatchService {
         // 뒤 트랜잭션은 여기서 대기했다가 앞 신청이 커밋된 뒤 중복 검사를 하게 된다(BR-01).
         User user = userRepository.findByIdForUpdate(userId)
                 .orElseThrow(() -> new CustomException(ErrorCode.USER_NOT_FOUND));
+
+        // 이메일 인증 게이트(FR-A-03). 가입·로그인·프로필 수정은 미인증으로도 되고 여기 하나만 막는다.
+        if (!user.isEmailVerified()) {
+            throw new CustomException(ErrorCode.EMAIL_NOT_VERIFIED);
+        }
 
         rejectIfInvalidMealDate(request.getMealDate(), now.toLocalDate());
         rejectIfAlreadyWaiting(userId, now);
@@ -163,14 +170,19 @@ public class MatchServiceImpl implements MatchService {
         if (notices.isEmpty()) {
             return;
         }
+        afterCommit(() -> send(notices));
+    }
+
+    /** 커밋된 뒤에 실행한다. 트랜잭션 밖에서 호출되면(단위 테스트 등) 그 자리에서 실행한다. */
+    private static void afterCommit(Runnable action) {
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-            send(notices);
+            action.run();
             return;
         }
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
-                send(notices);
+                action.run();
             }
         });
     }
@@ -209,6 +221,9 @@ public class MatchServiceImpl implements MatchService {
                 .filter(m -> m.getStatus() == MatchStatus.MATCHED)
                 .orElseThrow(() -> new CustomException(ErrorCode.MATCH_REQUEST_NOT_FOUND));
 
+        // leaveGroup()이 groupId를 지우므로 채팅방 주소는 먼저 챙겨둔다.
+        String groupId = request.getGroupId();
+
         // 이탈 처리 전에 그룹 행을 쓰기 잠금해서 조회하고 본인만 걷어낸다. 동시 이탈 트랜잭션은
         // 여기서 대기했다가 앞 이탈이 커밋된 뒤의 그룹을 보게 된다(이미 나간 사람은 안 딸려온다).
         List<MatchRequest> remaining = matchRequestRepository.findByGroupIdForUpdate(request.getGroupId()).stream()
@@ -217,6 +232,8 @@ public class MatchServiceImpl implements MatchService {
         request.leaveGroup();
 
         if (remaining.size() >= GroupMatcher.MIN_SIZE) {
+            // 나간 사람의 열려 있는 구독을 끊는다. 안 끊으면 소켓이 살아 있는 동안 남은 대화를 계속 본다(FR-T-02).
+            revokeSubscriptionsAfterCommit(groupId, emailsOf(List.of(request)));
             // 그룹은 유지된다. 나간 사람이 누구인지는 알리지 않는다 — 닉네임도 신원이다(NFR-05).
             notifyAfterCommit(notices(remaining, MEMBER_LEFT_SUBJECT, memberLeftBody(request, remaining.size())));
             return;
@@ -238,8 +255,36 @@ public class MatchServiceImpl implements MatchService {
                 m.returnToWaiting(expiresAt);
             }
         });
+        // 해체됐으니 방 자체가 없어진다. 나간 사람과 남은 사람의 구독을 모두 끊는다(FR-T-02).
+        List<MatchRequest> everyone = new ArrayList<>(remaining);
+        everyone.add(request);
+        revokeSubscriptionsAfterCommit(groupId, emailsOf(everyone));
+
         // 해체는 남은 전원에게 알린다. 앱을 열지 않으면 약속이 사라진 걸 알 방법이 없다(FR-N-02).
         notifyAfterCommit(notices(remaining, DISBANDED_SUBJECT, disbandedBody(request, pastMeal)));
+    }
+
+    /**
+     * 이미 열려 있는 채팅방 구독을 커밋 뒤에 끊는다(FR-T-02).
+     *
+     * 커밋 전에 끊으면 롤백된 이탈에도 구독이 날아간다. 반대로 커밋 후 끊기 전에 프로세스가 죽으면
+     * 그 세션의 수신만 소켓이 끊길 때까지 남는다 — 새 구독·발신·이력 조회는 인터셉터가 이미 막는다.
+     */
+    private void revokeSubscriptionsAfterCommit(String groupId, List<String> usernames) {
+        if (groupId == null || usernames.isEmpty()) {
+            return;
+        }
+        afterCommit(() -> stompSubscriptionRevoker.revoke(groupId, usernames));
+    }
+
+    /** STOMP 사용자 이름은 로그인 이메일이다(CustomUserDetails.getUsername). 준영속이 되기 전에 뽑는다. */
+    private static List<String> emailsOf(List<MatchRequest> requests) {
+        return requests.stream()
+                .map(MatchRequest::getUser)
+                .filter(Objects::nonNull)
+                .map(User::getEmail)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     /** 구성원 이탈, 그룹 유지(FR-N-02). 나간 사람이 아니라 "몇 명이 남았는지"만 알린다. */

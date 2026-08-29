@@ -18,6 +18,9 @@ public class JwtRedisService {
     // 캐시 키 프리픽스
     private static final String PROFILE_CACHE_PREFIX = "userProfile:";
     private static final String REFRESH_TOKEN_PREFIX = "refreshToken:";
+    private static final String EMAIL_VERIFY_PREFIX = "emailVerify:";
+    /** 이메일 인증 코드 유효 시간(분). 메일 본문에도 그대로 적는다. */
+    public static final long EMAIL_VERIFY_TTL_MINUTES = 10;
     private static final long PROFILE_CACHE_TTL_DAYS = 7; // 7일 동안 캐시 유지
 
     public JwtRedisService(RedisTemplate<String, Object> redisTemplate, JwtUtils jwtUtils, ObjectMapper objectMapper) {
@@ -113,6 +116,42 @@ public class JwtRedisService {
         }
         // 만약 추후에 해당 사용자의 다른 모든 세션의 Access Token을 무효화하려면,
         // 모든 발급된 Access Token을 저장하고 관리하는 로직 필요
+    }
+
+
+    /**
+     * 이메일 인증 코드를 Redis에 저장합니다(FR-A-03).
+     * key는 'emailVerify:{userId}'. 같은 키에 덮어쓰므로 재발송하면 이전 코드는 그 자리에서 무효가 됩니다.
+     * TTL이 지나면 키가 사라져 만료 처리가 됩니다.
+     *
+     * @param userId 사용자 고유 ID
+     * @param code   인증 코드
+     */
+    public void saveEmailVerificationCode(Long userId, String code) {
+        redisTemplate.opsForValue().set(EMAIL_VERIFY_PREFIX + userId,
+                code, Duration.ofMinutes(EMAIL_VERIFY_TTL_MINUTES));
+    }
+
+
+    /**
+     * 이메일 인증 코드를 조회합니다. 만료됐거나 발급한 적이 없으면 null입니다.
+     *
+     * @param userId 사용자 고유 ID
+     * @return 저장된 인증 코드 (없으면 null)
+     */
+    public String getEmailVerificationCode(Long userId) {
+        Object code = redisTemplate.opsForValue().get(EMAIL_VERIFY_PREFIX + userId);
+        return code == null ? null : code.toString();
+    }
+
+
+    /**
+     * 사용한 이메일 인증 코드를 삭제합니다. 같은 코드를 두 번 쓰지 못하게 합니다.
+     *
+     * @param userId 사용자 고유 ID
+     */
+    public void deleteEmailVerificationCode(Long userId) {
+        redisTemplate.delete(EMAIL_VERIFY_PREFIX + userId);
     }
 
 

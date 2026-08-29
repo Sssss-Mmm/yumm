@@ -12,6 +12,7 @@ import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.service.EmailService;
 import com.example.demo.service.JwtRedisService;
 import com.example.demo.service.MatchService;
 import com.example.demo.service.impl.AuthServiceImpl;
@@ -55,7 +56,7 @@ class UserWithdrawTest {
         matchRequestRepository = mock(MatchRequestRepository.class);
         matchService = mock(MatchService.class);
         userService = new UserServiceImpl(userRepository, mock(PasswordEncoder.class), mock(JwtRedisService.class),
-                matchRequestRepository, matchService);
+                matchRequestRepository, matchService, mock(EmailService.class));
     }
 
     private User user(Long id, String email) {

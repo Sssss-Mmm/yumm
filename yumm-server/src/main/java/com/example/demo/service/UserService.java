@@ -70,6 +70,23 @@ public interface UserService {
 
 
     /**
+     * 이메일 인증 코드를 발송합니다(FR-A-03). 재발송하면 이전 코드는 무효가 됩니다.
+     *
+     * @param userId 인증할 사용자의 고유 ID
+     */
+    void sendEmailVerification(Long userId);
+
+
+    /**
+     * 이메일 인증 코드를 확인하고 인증을 완료합니다(FR-A-03).
+     *
+     * @param userId 인증할 사용자의 고유 ID
+     * @param code   사용자가 입력한 인증 코드
+     */
+    void confirmEmailVerification(Long userId, String code);
+
+
+    /**
      * 유저의 모든 상세 정보 조회
      * @param userId
      * @return

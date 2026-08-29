@@ -4,16 +4,19 @@ import com.example.demo.domain.MatchRequest;
 import com.example.demo.domain.MatchStatus;
 import com.example.demo.domain.MealTime;
 import com.example.demo.domain.Region;
+import com.example.demo.domain.User;
 import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.EmailService;
+import com.example.demo.security.StompSubscriptionRevoker;
 import com.example.demo.service.impl.MatchServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -22,7 +25,9 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 /**
@@ -36,19 +41,22 @@ class MatchLeaveGroupTest {
     private static final String GROUP_ID = "g-1";
 
     private MatchRequestRepository matchRequestRepository;
+    private StompSubscriptionRevoker revoker;
     private MatchServiceImpl service;
 
     @BeforeEach
     void setUp() {
         matchRequestRepository = mock(MatchRequestRepository.class);
+        revoker = mock(StompSubscriptionRevoker.class);
         service = new MatchServiceImpl(matchRequestRepository, mock(UserRepository.class), mock(UserBlockRepository.class),
-                mock(EmailService.class));
+                mock(EmailService.class), revoker);
     }
 
     private static MatchRequest matched(long id, LocalDate mealDate) {
         MatchRequest request = MatchRequest.builder()
                 .id(id)
-                // 알림 본문(FR-N-02)이 읽는다. 실제 행에서는 NOT NULL이라 목에서도 채운다.
+                // 알림 본문(FR-N-02)과 구독 해제(FR-T-02)가 읽는다. 실제 행에서는 NOT NULL이라 목에서도 채운다.
+                .user(User.builder().id(id).email("u" + id + "@test.com").build())
                 .region(Region.GANGNAM)
                 .mealTime(MealTime.LUNCH)
                 .mealDate(mealDate)
@@ -139,6 +147,29 @@ class MatchLeaveGroupTest {
         assertThat(members.get(0).blocksReapply(now)).isFalse();
         assertThat(members.subList(1, 3))
                 .allSatisfy(m -> assertThat(m.blocksReapply(now)).isTrue());
+    }
+
+    @Test
+    @DisplayName("그룹이 유지되면 나간 사람의 열린 구독만 끊는다 (FR-T-02)")
+    void revokesLeaverSubscriptionOnly() {
+        group(4);
+
+        service.leaveGroup(USER_ID);
+
+        // 프레임 시점 검사만으로는 이미 열린 구독이 계속 수신한다. 이탈 시점에 실제로 끊어야 한다
+        verify(revoker).revoke(GROUP_ID, List.of("u1@test.com"));
+    }
+
+    @Test
+    @DisplayName("그룹이 해체되면 남은 인원의 구독까지 전부 끊는다 (FR-T-02)")
+    void revokesEveryoneOnDisband() {
+        group(3);
+
+        service.leaveGroup(USER_ID);
+
+        ArgumentCaptor<List<String>> users = ArgumentCaptor.forClass(List.class);
+        verify(revoker).revoke(eq(GROUP_ID), users.capture());
+        assertThat(users.getValue()).containsExactlyInAnyOrder("u1@test.com", "u2@test.com", "u3@test.com");
     }
 
     @Test

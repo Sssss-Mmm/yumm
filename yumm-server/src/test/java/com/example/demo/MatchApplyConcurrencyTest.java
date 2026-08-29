@@ -11,6 +11,7 @@ import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.EmailService;
+import com.example.demo.security.StompSubscriptionRevoker;
 import com.example.demo.service.impl.MatchServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -49,10 +50,11 @@ class MatchApplyConcurrencyTest {
     void setUp() {
         matchRequestRepository = mock(MatchRequestRepository.class);
         userRepository = mock(UserRepository.class);
-        service = new MatchServiceImpl(matchRequestRepository, userRepository, mock(UserBlockRepository.class), mock(EmailService.class));
+        service = new MatchServiceImpl(matchRequestRepository, userRepository, mock(UserBlockRepository.class), mock(EmailService.class), mock(StompSubscriptionRevoker.class));
 
         when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(
-                User.builder().id(USER_ID).nickname("u600").gender(Gender.MALE).build()));
+                User.builder().id(USER_ID).nickname("u600").gender(Gender.MALE)
+                        .emailVerifiedAt(LocalDateTime.now()).build()));
         when(matchRequestRepository.save(any(MatchRequest.class))).thenAnswer(inv -> inv.getArgument(0));
     }
 

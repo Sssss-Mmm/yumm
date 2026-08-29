@@ -52,6 +52,9 @@ public class User {
     // 탈퇴 시각. NULL = 정상 계정. 행 자체는 남긴다(FR-A-08).
     private LocalDateTime withdrawnAt;
 
+    // 이메일 인증 시각(FR-A-03). NULL = 미인증. 가입은 미인증으로도 되고, 막히는 건 매칭 신청뿐이다.
+    private LocalDateTime emailVerifiedAt;
+
 
 
     public void updateProfile(String nickname, String profileImageUrl) {
@@ -93,6 +96,18 @@ public class User {
             throw new IllegalArgumentException("이메일은 필수 입력 항목입니다.");
         }
             this.email = newEmail;
+            // 인증은 "이 주소를 실제로 받아본다"는 증명이라 주소가 바뀌면 같이 무효가 된다.
+            // 안 지우면 아무 주소나 인증된 계정으로 만들 수 있어 게이트가 뚫린다(FR-A-03).
+            this.emailVerifiedAt = null;
+    }
+
+    /** 이메일 인증 완료(FR-A-03). 코드 검증은 서비스가 한다. */
+    public void verifyEmail(LocalDateTime at) {
+        this.emailVerifiedAt = at;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerifiedAt != null;
     }
     
 }

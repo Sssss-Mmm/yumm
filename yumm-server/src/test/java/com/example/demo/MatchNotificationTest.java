@@ -12,6 +12,7 @@ import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.impl.EmailServiceImpl;
+import com.example.demo.security.StompSubscriptionRevoker;
 import com.example.demo.service.impl.MatchServiceImpl;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,7 +65,7 @@ class MatchNotificationTest {
         // 호스트는 예약 TLD. 값이 비어 있으면 구현이 발송을 건너뛰므로 아무 값이나 있어야 한다.
         EmailServiceImpl emailService = new EmailServiceImpl(mailSender, "no-reply@yumm.local", "smtp.invalid");
         service = new MatchServiceImpl(matchRequestRepository, mock(UserRepository.class),
-                mock(UserBlockRepository.class), emailService);
+                mock(UserBlockRepository.class), emailService, mock(StompSubscriptionRevoker.class));
 
         waiting = List.of(request(1), request(2), request(3));
         when(matchRequestRepository.findWaitingInBucket(any(), any(), any(), any())).thenReturn(waiting);
