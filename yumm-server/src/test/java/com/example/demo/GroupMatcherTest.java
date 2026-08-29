@@ -34,8 +34,17 @@ class GroupMatcherTest {
 
     /** 2인 허용을 고른 대기자. expiresIn이 5분 이내면 폴백 대상이 된다. */
     private static Candidate pairOptIn(long id, long expiresInMinutes) {
+        return expiring(id, expiresInMinutes, true);
+    }
+
+    /** 만료는 임박했지만 2인 허용을 고르지 않은 대기자. 쌍방 조건(FR-G-10)을 가르는 쪽이다. */
+    private static Candidate pairOptOut(long id, long expiresInMinutes) {
+        return expiring(id, expiresInMinutes, false);
+    }
+
+    private static Candidate expiring(long id, long expiresInMinutes, boolean allowPair) {
         return new Candidate(id, id, Gender.MALE, GenderPreference.ANY, Set.of(FoodCategory.KOREAN),
-                BASE.plusMinutes(id), NOW.plusMinutes(expiresInMinutes), true);
+                BASE.plusMinutes(id), NOW.plusMinutes(expiresInMinutes), allowPair);
     }
 
     /** 한식만 좋아하는 서로 호환되는 대기자 (차단 테스트용) */
@@ -187,9 +196,8 @@ class GroupMatcherTest {
     @Test
     @DisplayName("한쪽만 2인 허용이면 2인 그룹을 만들지 않는다")
     void 폴백은_쌍방일_때만() {
-        List<Candidate> waiting = List.of(
-                pairOptIn(1, 3),
-                candidate(2, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN)); // allowPair=false
+        // 상대도 만료가 임박했다. 여기서 안 묶이는 이유는 만료가 아니라 옵트인이 한쪽뿐이어서다.
+        List<Candidate> waiting = List.of(pairOptIn(1, 3), pairOptOut(2, 3));
 
         assertThat(GroupMatcher.formGroups(waiting, Set.of(), NOW)).isEmpty();
     }

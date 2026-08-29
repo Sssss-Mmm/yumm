@@ -111,16 +111,13 @@ public final class GroupMatcher {
      *
      * <p>순서가 중요하다. 3인을 만들 수 있는데 2인으로 마감하면 손해이므로 폴백은 항상 뒤다.
      * 조건은 셋이다 — 쌍방이 2인 허용을 골랐고(FR-G-10), 둘 다 만료가 임박했고(FR-G-09),
-     * 성별·차단 조건이 맞아야 한다.
-     *
-     * <p>allowPair를 {@link #compatible}에 넣지 않은 이유: 그건 2인 성사 조건이지 일반 호환성이
-     * 아니다. 거기 넣으면 옵트인한 사람이 옵트인하지 않은 사람들과 3~4인 그룹을 만들지 못한다.
+     * 성별·차단 조건이 맞아야 한다. 앞의 둘 중 쌍방 옵트인은 관계형 조건이라
+     * {@link #compatible}이 성별·차단과 같은 자리에서 본다.
      */
     private static List<List<Candidate>> formPairs(List<Candidate> pool, Set<Long> used,
                                                    Set<BlockedPair> blocked, LocalDateTime now) {
         List<Candidate> eligible = pool.stream()
                 .filter(c -> !used.contains(c.id()))
-                .filter(Candidate::allowPair)
                 .filter(c -> expiringSoon(c, now))
                 .toList();
 
@@ -129,7 +126,7 @@ public final class GroupMatcher {
             if (used.contains(seed.id())) continue;
             for (Candidate other : eligible) { // eligible은 pool 정렬을 물려받아 먼저 온 사람이 먼저다
                 if (other.id().equals(seed.id()) || used.contains(other.id())) continue;
-                if (!compatible(seed, other, blocked)) continue;
+                if (!compatible(seed, other, blocked, true)) continue;
 
                 pairs.add(List.of(seed, other));
                 used.add(seed.id());
@@ -169,12 +166,24 @@ public final class GroupMatcher {
     }
 
     /**
-     * 성별 조건은 쌍방 충족이어야 한다. 한쪽만 만족하는 매칭은 성사시키지 않는다.
-     * 차단도 같은 이유로 쌍방 배제다 — 누가 누구를 차단했든 둘은 같은 그룹에 들어가지 않는다(FR-S-02).
+     * 두 사람을 같은 그룹에 넣어도 되는지. 성별 조건은 쌍방 충족이어야 하고, 한쪽만 만족하는
+     * 매칭은 성사시키지 않는다. 차단도 같은 이유로 쌍방 배제다 — 누가 누구를 차단했든 둘은
+     * 같은 그룹에 들어가지 않는다(FR-S-02).
+     *
+     * <p>이 메서드는 두 용도로 쓰인다. 3~4인 편성은 {@code requirePair=false}로 불러 성별·차단만
+     * 보고, 2인 폴백만 {@code requirePair=true}로 불러 쌍방 2인 허용(FR-G-10)을 하드 조건으로
+     * 하나 더 건다. allowPair를 늘 검사하면 옵트인한 사람이 옵트인하지 않은 사람들과
+     * 3~4인 그룹을 만들지 못한다 — 옵트인은 "2인이어도 괜찮다"지 "2인만 하겠다"가 아니다.
      */
-    static boolean compatible(Candidate a, Candidate b, Set<BlockedPair> blocked) {
+    static boolean compatible(Candidate a, Candidate b, Set<BlockedPair> blocked, boolean requirePair) {
         if (blocked.contains(new BlockedPair(a.userId(), b.userId()))) return false;
+        if (requirePair && !(a.allowPair() && b.allowPair())) return false;
         return accepts(a, b) && accepts(b, a);
+    }
+
+    /** 3~4인 편성용. 2인 성사 조건인 allowPair는 보지 않는다. */
+    static boolean compatible(Candidate a, Candidate b, Set<BlockedPair> blocked) {
+        return compatible(a, b, blocked, false);
     }
 
     private static boolean accepts(Candidate x, Candidate other) {
