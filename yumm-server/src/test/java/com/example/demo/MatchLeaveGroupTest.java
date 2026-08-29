@@ -134,6 +134,10 @@ class MatchLeaveGroupTest {
         // WAITING으로 되돌리면 과거 날짜 버킷이 스케줄러에 다시 잡힌다
         assertThat(members.subList(1, 3))
                 .allSatisfy(m -> assertThat(m.getStatus()).isEqualTo(MatchStatus.CANCELLED));
+
+        // 상태만 바꾸고 groupId를 남기면 existsByGroupIdAndUser_Id가 계속 true라
+        // 해체된 방에 다시 구독하고 메시지 이력도 그대로 열린다(FR-T-02).
+        assertThat(members).allSatisfy(m -> assertThat(m.getGroupId()).isNull());
     }
 
     @Test

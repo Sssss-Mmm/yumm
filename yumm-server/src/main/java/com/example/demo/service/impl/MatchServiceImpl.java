@@ -250,7 +250,9 @@ public class MatchServiceImpl implements MatchService {
             // 지난 끼니를 대기열로 되돌리면 findWaitingBuckets가 과거 날짜 버킷을 뱉어 스케줄러가
             // 지난 날짜 그룹을 새로 편성하고, 이미 재신청한 사람은 WAITING 2건이 된다(BR-01 위반).
             if (pastMeal) {
-                m.cancel();
+                // cancel()만 하면 groupId가 남아 existsByGroupIdAndUser_Id가 계속 true다 —
+                // 구독을 끊어도 곧바로 재구독하고 메시지 이력도 열려 있다(FR-T-02).
+                m.leaveGroup();
             } else {
                 m.returnToWaiting(expiresAt);
             }

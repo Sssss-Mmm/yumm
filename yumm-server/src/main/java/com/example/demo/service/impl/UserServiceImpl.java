@@ -154,7 +154,7 @@ public class UserServiceImpl implements UserService {
 
     /** 회원 이메일 (로그인 ID) 변경 */
     @Override
-    public EmailResponse updateEmail(Long userId, EmailUpdateRequest updateRequest) {
+    public EmailResponse updateEmail(Long userId, EmailUpdateRequest updateRequest, String accessToken) {
         User user = findUserByIdOrThrow(userId);
 
         // 현재 비밀번호로 본인 인증
@@ -168,9 +168,9 @@ public class UserServiceImpl implements UserService {
         // 이메일 변경 //User savedUser = userRepository.save(user);
         user.updateEmail(updateRequest.getNewEmail());
         
-        // 이메일(로그인 ID) 변경은 중요한 보안 이벤트이므로, 기존 토큰 모두 무효화
-        // 클라이언트에서 사용 중인 AccessToken도 invalidateAllUserTokens에 전달할 수 있음
-        jwtRedisService.invalidateAllUserTokens(userId, null);
+        // 이메일(로그인 ID) 변경은 중요한 보안 이벤트이므로, 기존 토큰 모두 무효화.
+        // 토큰을 넘기지 않으면 블랙리스트가 비어 옛 로그인 ID로 발급된 토큰이 만료(10시간)까지 살아 있다.
+        jwtRedisService.invalidateAllUserTokens(userId, accessToken);
 
         return EmailResponse.from(user);
     }
@@ -178,7 +178,7 @@ public class UserServiceImpl implements UserService {
     
     /** 비밀번호 변경 */
     @Override
-    public void changePassword(Long userId, ChangePasswordRequest updateRequest) {
+    public void changePassword(Long userId, ChangePasswordRequest updateRequest, String accessToken) {
         // 사용자 조회(존재하지 않으면 예외처리)
         User user = findUserByIdOrThrow(userId);
         
@@ -191,8 +191,9 @@ public class UserServiceImpl implements UserService {
         String newPassword = passwordEncoder.encode(updateRequest.getNewPassword());
         user.updatePassword(newPassword);
 
-        // 비밀번호 변경은 중요한 보안 이벤트이므로, 해당 사용자의 모든 토큰을 무효화
-        jwtRedisService.invalidateAllUserTokens(userId, null); 
+        // 비밀번호 변경은 중요한 보안 이벤트이므로, 해당 사용자의 모든 토큰을 무효화.
+        // 토큰을 넘기지 않으면 블랙리스트가 비어 옛 비밀번호로 받은 토큰이 만료(10시간)까지 살아 있다.
+        jwtRedisService.invalidateAllUserTokens(userId, accessToken);
     }
 
 

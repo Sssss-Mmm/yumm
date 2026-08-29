@@ -82,13 +82,15 @@ public class UserController {
      *
      * @param userDetails 현재 인증된 사용자의 CustomUserDetails 객체에서 ID를 추출하기 위함.
      * @param updateRequest 변경할 새로운 이메일 주소와 현재 비밀번호를 담은 DTO.
+     * @param authHeader  이 요청의 Authorization 헤더. 여기 실린 Access Token을 즉시 블랙리스트에 넣는다.
      * @return 업데이트된 사용자 이메일 정보를 담은 DTO.
      */
     @PutMapping("/email")
-    @Operation(summary = "사용자 이메일 변경", description = "현재 비밀번호 인증 후 이메일을 변경합니다.")
+    @Operation(summary = "사용자 이메일 변경", description = "현재 비밀번호 인증 후 이메일을 변경합니다. 변경 즉시 기존 토큰은 무효가 되어 재로그인이 필요합니다.")
     public ResponseEntity<ApiResponse<EmailResponse>> updateEmail(@AuthenticationPrincipal CustomUserDetails userDetails,
-                                                                  @RequestBody EmailUpdateRequest updateRequest) {
-        EmailResponse emailResponse = userService.updateEmail(userDetails.getId(), updateRequest);
+                                                                  @RequestBody EmailUpdateRequest updateRequest,
+                                                                  @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        EmailResponse emailResponse = userService.updateEmail(userDetails.getId(), updateRequest, bearerToken(authHeader));
 
         return ApiResponse.ok("이메일이 성공적으로 변경되었습니다.", emailResponse);
     }
@@ -154,13 +156,15 @@ public class UserController {
      *
      * @param userDetails 현재 인증된 사용자의 CustomUserDetails 객체에서 ID를 추출하기 위함.
      * @param updateRequest 현재 비밀번호와 새로운 비밀번호 정보를 담은 DTO.
+     * @param authHeader  이 요청의 Authorization 헤더. 여기 실린 Access Token을 즉시 블랙리스트에 넣는다.
      * @return 비밀번호 변경 성공 메시지를 포함하는 응답.
      */
     @PutMapping("/password")
-    @Operation(summary = "사용자 비밀번호 변경", description = "현재 비밀번호와 새로운 비밀번호를 입력받아 비밀번호를 변경합니다.")
+    @Operation(summary = "사용자 비밀번호 변경", description = "현재 비밀번호와 새로운 비밀번호를 입력받아 비밀번호를 변경합니다. 변경 즉시 기존 토큰은 무효가 되어 재로그인이 필요합니다.")
     public ResponseEntity<ApiResponse<Void>> changePassword(@AuthenticationPrincipal CustomUserDetails userDetails, 
-                                                            @RequestBody ChangePasswordRequest updateRequest) {
-        userService.changePassword(userDetails.getId(), updateRequest);
+                                                            @RequestBody ChangePasswordRequest updateRequest,
+                                                            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        userService.changePassword(userDetails.getId(), updateRequest, bearerToken(authHeader));
 
         return ApiResponse.ok("비밀번호가 성공적으로 변경되었습니다.");                           
     }
@@ -180,12 +184,18 @@ public class UserController {
     public ResponseEntity<ApiResponse<Void>> withdraw(@AuthenticationPrincipal CustomUserDetails userDetails,
                                                       @RequestHeader(value = "Authorization", required = false) String authHeader) {
 
-        // 필터를 통과해 여기까지 왔으므로 헤더는 정상이지만, 형식이 어긋나도 탈퇴 자체는 진행한다.
-        String accessToken = (authHeader != null && authHeader.startsWith("Bearer "))
-                ? authHeader.substring("Bearer ".length()) : null;
-
-        userService.withdraw(userDetails.getId(), accessToken);
+        userService.withdraw(userDetails.getId(), bearerToken(authHeader));
     
         return ApiResponse.ok("회원 탈퇴가 완료되었습니다.");
+    }
+
+
+    /**
+     * Authorization 헤더에서 Access Token만 떼어낸다.
+     * 필터를 통과해 여기까지 왔으므로 헤더는 정상이지만, 형식이 어긋나도 요청 자체는 진행한다.
+     */
+    private static String bearerToken(String authHeader) {
+        return (authHeader != null && authHeader.startsWith("Bearer "))
+                ? authHeader.substring("Bearer ".length()) : null;
     }
 }

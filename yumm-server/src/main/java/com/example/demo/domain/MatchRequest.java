@@ -102,7 +102,8 @@ public class MatchRequest {
     }
 
     /**
-     * 매칭된 그룹에서 이탈한다(FR-C-02).
+     * 그룹에서 빠지고 신청을 종료한다. 본인 이탈(FR-C-02)과, 대기열로 되돌리지 않는 해체
+     * (지난 끼니)에서 남은 인원을 정리할 때 함께 쓴다.
      * groupId를 비우는 것만으로 그룹 채팅 구독/발신/조회 판정(existsByGroupIdAndUser_Id)에서도 빠진다.
      */
     public void leaveGroup() {

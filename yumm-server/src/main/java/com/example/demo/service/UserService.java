@@ -47,9 +47,10 @@ public interface UserService {
      *
      * @param userId      사용자의 고유 ID
      * @param updateDto   새 이메일과 현재 비밀번호를 담은 DTO
+     * @param accessToken 이 요청에 실린 Access Token. 그 자리에서 블랙리스트에 넣는다(없으면 null)
      * @return 변경된 프로필 정보를 포함한 DTO
      */
-    EmailResponse updateEmail(Long userId, EmailUpdateRequest updateRequest);
+    EmailResponse updateEmail(Long userId, EmailUpdateRequest updateRequest, String accessToken);
 
 
     /**
@@ -57,8 +58,9 @@ public interface UserService {
      *
      * @param userId                   사용자의 고유 ID
      * @param changePasswordRequest    기존 비밀번호와 새 비밀번호를 담은 DTO
+     * @param accessToken              이 요청에 실린 Access Token. 그 자리에서 블랙리스트에 넣는다(없으면 null)
      */
-    void changePassword(Long userId, ChangePasswordRequest updateRequest);
+    void changePassword(Long userId, ChangePasswordRequest updateRequest, String accessToken);
 
     
     /**
