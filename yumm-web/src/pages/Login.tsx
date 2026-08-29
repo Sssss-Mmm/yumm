@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { api, setTokens } from "../api";
+import { btn, card, h1, input } from "../ui";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -22,14 +23,19 @@ const Login = () => {
   };
 
   return (
-    <form onSubmit={submit} className="max-w-sm mx-auto flex flex-col gap-3">
-      <h1 className="text-2xl font-bold">로그인</h1>
-      <input name="email" type="email" required placeholder="이메일" className="border rounded p-2" />
-      <input name="password" type="password" required placeholder="비밀번호" className="border rounded p-2" />
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-      <button className="bg-blue-600 text-white rounded p-2">로그인</button>
-      <Link to="/registration" className="text-sm text-blue-600 hover:underline">회원가입</Link>
-    </form>
+    <div className="flex flex-col gap-4">
+      <h1 className={h1}>로그인</h1>
+      <form onSubmit={submit} className={`${card} flex flex-col gap-3`}>
+        <input name="email" type="email" required placeholder="이메일" className={input} />
+        <input name="password" type="password" required placeholder="비밀번호" className={input} />
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <button className={btn}>로그인</button>
+      </form>
+      <p className="text-center text-sm text-stone-500">
+        처음이신가요?{" "}
+        <Link to="/registration" className="font-medium text-orange-600 hover:underline">회원가입</Link>
+      </p>
+    </div>
   );
 };
 

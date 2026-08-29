@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, blockUser, leaveGroup, reportUser } from "../api";
 import { myUserId } from "../ws";
+import { btn, btnGhost, btnSm, card, h1, input, label, muted } from "../ui";
 
 // 서버 Region enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
 // ponytail: 목록은 프론트 상수. 지역이 자주 바뀌면 그때 서버에서 내려받는다.
@@ -177,24 +178,39 @@ const Match = () => {
 
   if (status?.status === "WAITING" || status?.status === "MATCHED") {
     return (
-      <div className="max-w-sm mx-auto flex flex-col gap-3">
-        <h1 className="text-2xl font-bold">
-          {status.status === "WAITING" ? "밥메이트 찾는 중…" : "매칭 완료!"}
-        </h1>
-        <p className="text-gray-600">
-          {REGIONS[status.region]} · {status.mealDate} · {MEAL_TIMES[status.mealTime]}
-        </p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            {status.status === "WAITING"
+              ? <span className="h-2 w-2 animate-pulse rounded-full bg-orange-500" />
+              : <span className="h-2 w-2 rounded-full bg-emerald-500" />}
+            <h1 className={h1}>
+              {status.status === "WAITING" ? "밥메이트 찾는 중" : "매칭 완료!"}
+            </h1>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {[REGIONS[status.region], status.mealDate, MEAL_TIMES[status.mealTime]].map((t) => (
+              <span key={t} className="rounded-full bg-stone-100 px-2.5 py-1 text-xs font-medium text-stone-600">
+                {t}
+              </span>
+            ))}
+          </div>
+        </div>
         {status.status === "WAITING" ? (
           <>
             {disbanded && (
-              <p className="border border-amber-300 bg-amber-50 text-amber-800 rounded p-2 text-sm">
+              <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
                 그룹이 해체되어 다시 대기 중입니다.
               </p>
             )}
-            <p className="text-sm text-gray-500">
-              {new Date(status.expiresAt).toLocaleTimeString()}까지 기다립니다.
-            </p>
-            <button onClick={cancel} className="border rounded p-2">신청 취소</button>
+            <div className={`${card} flex flex-col items-center gap-1 text-center`}>
+              <p className="text-sm text-stone-600">조건이 맞는 사람을 찾고 있어요</p>
+              <p className="text-2xl font-bold tracking-tight">
+                {new Date(status.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+              <p className={muted}>까지 기다립니다</p>
+            </div>
+            <button onClick={cancel} className={btnGhost}>신청 취소</button>
           </>
         ) : (
           <>
@@ -202,18 +218,23 @@ const Match = () => {
               {status.members.map((m) => {
                 const isMe = me !== null && m.userId === me;
                 return (
-                <li key={m.userId} className="border rounded p-2 flex flex-col gap-2">
+                <li key={m.userId} className="flex flex-col gap-2 rounded-2xl border border-stone-200 bg-white p-3.5 shadow-sm">
                   <div className="flex items-center justify-between gap-2">
-                    <span>
-                      {m.nickname}
-                      {isMe && <span className="ml-1 text-sm text-gray-500">(나)</span>}
+                    <span className="flex items-center gap-2.5">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-orange-100 text-sm font-semibold text-orange-700">
+                        {m.nickname.slice(0, 1)}
+                      </span>
+                      <span className="font-medium">
+                        {m.nickname}
+                        {isMe && <span className="ml-1 text-sm font-normal text-stone-400">(나)</span>}
+                      </span>
                     </span>
                     {!isMe && (
                       <button
                         type="button"
                         onClick={() => block(m)}
                         disabled={busy === m.userId}
-                        className="text-sm border rounded px-2 py-1 disabled:opacity-50"
+                        className={btnSm}
                       >
                         차단
                       </button>
@@ -222,26 +243,26 @@ const Match = () => {
                   {/* ponytail: 네이티브 details — 열림 상태를 React state로 들 이유가 없다 */}
                   {!isMe && (
                     <details className="text-sm">
-                      <summary className="cursor-pointer text-gray-600">신고</summary>
+                      <summary className="cursor-pointer text-stone-500 hover:text-stone-800">신고</summary>
                       <form onSubmit={(e) => report(e, m.userId)} className="flex flex-col gap-2 pt-2">
-                        <label className="flex flex-col gap-1">사유
-                          <select name="reason" required className="border rounded p-2">
+                        <label className="flex flex-col gap-1.5"><span className={label}>사유</span>
+                          <select name="reason" required className={input}>
                             {Object.entries(REPORT_REASONS).map(([v, label]) => (
                               <option key={v} value={v}>{label}</option>
                             ))}
                           </select>
                         </label>
-                        <label className="flex flex-col gap-1">상세 내용 (선택)
-                          <textarea name="detail" rows={2} className="border rounded p-2" />
+                        <label className="flex flex-col gap-1.5"><span className={label}>상세 내용 (선택)</span>
+                          <textarea name="detail" rows={2} className={input} />
                         </label>
-                        <button disabled={busy === m.userId} className="bg-blue-600 text-white rounded p-2 disabled:opacity-50">
+                        <button disabled={busy === m.userId} className={btn}>
                           {busy === m.userId ? "보내는 중…" : "신고 보내기"}
                         </button>
                       </form>
                     </details>
                   )}
                   {!isMe && notice?.userId === m.userId && (
-                    <p className={`text-sm ${notice.ok ? "text-green-700" : "text-red-600"}`}>{notice.text}</p>
+                    <p className={`text-sm ${notice.ok ? "text-emerald-700" : "text-red-600"}`}>{notice.text}</p>
                   )}
                 </li>
                 );
@@ -250,11 +271,11 @@ const Match = () => {
             {/* 채팅방 입장이 곧 참석 의사 표시다 (FR-C-01) */}
             <div className="flex gap-2">
               {status.groupId && (
-                <Link to={`/chat/${status.groupId}`} className="flex-1 bg-blue-600 text-white rounded p-2 text-center">
+                <Link to={`/chat/${status.groupId}`} className={`${btn} flex-1`}>
                   채팅방 입장
                 </Link>
               )}
-              <button onClick={leave} disabled={leaving} className="flex-1 border rounded p-2 disabled:opacity-50">
+              <button onClick={leave} disabled={leaving} className={`${btnGhost} flex-1`}>
                 {leaving ? "나가는 중…" : "그룹 나가기"}
               </button>
             </div>
@@ -266,43 +287,64 @@ const Match = () => {
   }
 
   return (
-    <form onSubmit={apply} className="max-w-sm mx-auto flex flex-col gap-3">
-      <h1 className="text-2xl font-bold">밥메이트 신청</h1>
-      {status && <p className="text-sm text-gray-500">지난 신청: {status.status === "TIMEOUT" ? "시간 초과" : "취소됨"}</p>}
+    <form onSubmit={apply} className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1">
+        <h1 className={h1}>밥메이트 신청</h1>
+        <p className={muted}>조건이 맞는 3~4명을 묶어드려요.</p>
+      </div>
+      {status && (
+        <p className="rounded-xl bg-stone-100 px-3 py-2 text-sm text-stone-500">
+          지난 신청: {status.status === "TIMEOUT" ? "시간 초과" : "취소됨"}
+        </p>
+      )}
 
-      <label className="flex flex-col gap-1">지역
-        <select name="region" required className="border rounded p-2">
-          {Object.entries(REGIONS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-        </select>
-      </label>
+      <div className={`${card} flex flex-col gap-3`}>
+        <label className="flex flex-col gap-1.5">
+          <span className={label}>지역</span>
+          <select name="region" required className={input}>
+            {Object.entries(REGIONS).map(([v, text]) => <option key={v} value={v}>{text}</option>)}
+          </select>
+        </label>
 
-      <label className="flex flex-col gap-1">날짜
-        <input name="mealDate" type="date" required defaultValue={today} min={today} className="border rounded p-2" />
-      </label>
-
-      <label className="flex flex-col gap-1">점심/저녁
-        <select name="mealTime" required className="border rounded p-2">
-          {Object.entries(MEAL_TIMES).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-        </select>
-      </label>
-
-      <label className="flex flex-col gap-1">상대 성별
-        <select name="genderPreference" required className="border rounded p-2">
-          {Object.entries(GENDER_PREFS).map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-        </select>
-      </label>
-
-      <fieldset className="flex flex-wrap gap-3">
-        <legend className="mb-1">선호 음식 (1개 이상)</legend>
-        {Object.entries(FOODS).map(([v, label]) => (
-          <label key={v} className="flex gap-1 items-center">
-            <input type="checkbox" name="foodPreferences" value={v} /> {label}
+        <div className="flex gap-3">
+          <label className="flex flex-1 flex-col gap-1.5">
+            <span className={label}>날짜</span>
+            <input name="mealDate" type="date" required defaultValue={today} min={today} className={input} />
           </label>
-        ))}
+          <label className="flex flex-col gap-1.5">
+            <span className={label}>점심/저녁</span>
+            <select name="mealTime" required className={input}>
+              {Object.entries(MEAL_TIMES).map(([v, text]) => <option key={v} value={v}>{text}</option>)}
+            </select>
+          </label>
+        </div>
+
+        <label className="flex flex-col gap-1.5">
+          <span className={label}>상대 성별</span>
+          <select name="genderPreference" required className={input}>
+            {Object.entries(GENDER_PREFS).map(([v, text]) => <option key={v} value={v}>{text}</option>)}
+          </select>
+        </label>
+      </div>
+
+      {/* ponytail: peer + sr-only. 체크박스를 그대로 두니 폼 전송도 키보드 접근도 공짜다 */}
+      <fieldset className={`${card} flex flex-col gap-2.5`}>
+        <legend className="sr-only">선호 음식</legend>
+        <span className={label}>선호 음식 <span className="text-stone-400">(1개 이상)</span></span>
+        <div className="flex flex-wrap gap-2">
+          {Object.entries(FOODS).map(([v, text]) => (
+            <label key={v} className="cursor-pointer">
+              <input type="checkbox" name="foodPreferences" value={v} className="peer sr-only" />
+              <span className="block rounded-full border border-stone-300 bg-white px-3.5 py-1.5 text-sm text-stone-600 transition peer-checked:border-orange-600 peer-checked:bg-orange-600 peer-checked:text-white peer-focus-visible:ring-2 peer-focus-visible:ring-orange-200">
+                {text}
+              </span>
+            </label>
+          ))}
+        </div>
       </fieldset>
 
-      {error && <p className="text-red-600 text-sm">{error}</p>}
-      <button className="bg-blue-600 text-white rounded p-2">신청하기</button>
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <button className={btn}>신청하기</button>
     </form>
   );
 };

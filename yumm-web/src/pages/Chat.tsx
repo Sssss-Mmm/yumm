@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
 import { connectChat, myUserId, type ChatMessage } from "../ws";
+import { btn, btnGhost, h1, input } from "../ui";
 
 const time = (sentAt: string) => {
   const d = new Date(sentAt);
@@ -57,34 +58,39 @@ const Chat = () => {
 
   const send = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const input = e.currentTarget.elements.namedItem("content") as HTMLInputElement;
-    const content = input.value.trim();
+    const field = e.currentTarget.elements.namedItem("content") as HTMLInputElement;
+    const content = field.value.trim();
     if (!content || state !== "open") return;
     socket.current?.send(content);
-    input.value = "";
+    field.value = "";
   };
 
   return (
-    <div className="max-w-sm mx-auto flex flex-col gap-2 h-[calc(100vh-8rem)]">
-      <h1 className="text-2xl font-bold">그룹 채팅</h1>
+    <div className="flex h-[calc(100vh-9rem)] flex-col gap-3">
+      <div className="flex items-center gap-2">
+        <span className={`h-2 w-2 rounded-full ${
+          state === "open" ? "bg-emerald-500" : state === "error" ? "bg-red-500" : "animate-pulse bg-stone-300"
+        }`} />
+        <h1 className={h1}>그룹 채팅</h1>
+      </div>
 
       {state === "error" ? (
         <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center">
-          <p className="text-red-600 text-sm">{error}</p>
-          <button onClick={() => setAttempt((n) => n + 1)} className="border rounded p-2 px-4">
+          <p className="text-sm text-red-600">{error}</p>
+          <button onClick={() => setAttempt((n) => n + 1)} className={btnGhost}>
             다시 연결
           </button>
         </div>
       ) : (
-        <ul className="flex-1 overflow-y-auto flex flex-col gap-2 border rounded p-2">
+        <ul className="flex flex-1 flex-col gap-3 overflow-y-auto rounded-2xl border border-stone-200 bg-white p-3.5 shadow-sm">
           {historyError && (
             <li className="text-center text-xs text-red-600">
               지난 대화를 불러오지 못했습니다. {historyError}
             </li>
           )}
-          {loading && <li className="m-auto text-gray-500 text-sm">지난 대화를 불러오는 중…</li>}
+          {loading && <li className="m-auto text-sm text-stone-400">지난 대화를 불러오는 중…</li>}
           {!loading && !historyError && messages.length === 0 && (
-            <li className="m-auto text-gray-500 text-sm text-center">
+            <li className="m-auto text-center text-sm text-stone-400">
               아직 대화가 없습니다.
               <br />
               먼저 인사를 건네보세요.
@@ -94,21 +100,23 @@ const Chat = () => {
             const mine = msg.senderId === me;
             return (
               <li key={i} className={`flex flex-col ${mine ? "items-end" : "items-start"}`}>
-                {!mine && <span className="text-xs text-gray-500">{msg.sender}</span>}
+                {!mine && <span className="mb-0.5 ml-1 text-xs text-stone-500">{msg.sender}</span>}
                 <div className="flex items-end gap-1 max-w-[80%]">
-                  {mine && <span className="text-[10px] text-gray-400">{time(msg.sentAt)}</span>}
-                  <p className={`rounded p-2 text-sm break-words whitespace-pre-wrap ${
-                    mine ? "bg-blue-600 text-white" : "bg-gray-100"
+                  {mine && <span className="text-[10px] text-stone-400">{time(msg.sentAt)}</span>}
+                  <p className={`break-words whitespace-pre-wrap px-3.5 py-2 text-sm ${
+                    mine
+                      ? "rounded-2xl rounded-br-md bg-orange-600 text-white"
+                      : "rounded-2xl rounded-bl-md bg-stone-100 text-stone-800"
                   }`}>
                     {msg.content}
                   </p>
-                  {!mine && <span className="text-[10px] text-gray-400">{time(msg.sentAt)}</span>}
+                  {!mine && <span className="text-[10px] text-stone-400">{time(msg.sentAt)}</span>}
                 </div>
               </li>
             );
           })}
           {!loading && state === "connecting" && (
-            <li className="text-center text-xs text-gray-400">연결 중…</li>
+            <li className="text-center text-xs text-stone-400">연결 중…</li>
           )}
           <li ref={bottom} />
         </ul>
@@ -120,9 +128,9 @@ const Chat = () => {
           autoComplete="off"
           disabled={state !== "open"}
           placeholder={state === "open" ? "메시지를 입력하세요" : "연결되면 입력할 수 있어요"}
-          className="border rounded p-2 flex-1 min-w-0 disabled:bg-gray-100"
+          className={`${input} min-w-0 flex-1`}
         />
-        <button disabled={state !== "open"} className="bg-blue-600 text-white rounded p-2 px-4 disabled:bg-gray-300">
+        <button disabled={state !== "open"} className={btn}>
           전송
         </button>
       </form>
