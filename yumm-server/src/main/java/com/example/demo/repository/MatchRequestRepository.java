@@ -50,6 +50,22 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Long
             """)
     List<Bucket> findWaitingBuckets(@Param("now") LocalDateTime now);
 
+    /**
+     * 오늘 식사 예정인 성사된 신청 전부(FR-N-04 리마인드 대상).
+     *
+     * 이미 보낸 행(remindedAt != null)까지 같이 읽는다. 그래야 그룹 인원 수를 이 결과만으로 셀 수 있다 —
+     * 보낸 행을 빼면 일부만 발송된 그룹의 인원이 실제보다 적게 나온다. 발송 여부 판정은 서비스가 한다.
+     * 메일 주소를 쓰므로 user를 같이 읽는다(그러지 않으면 대상 수만큼 추가 쿼리가 나간다).
+     */
+    @Query("""
+            SELECT m FROM MatchRequest m
+            JOIN FETCH m.user
+            WHERE m.status = com.example.demo.domain.MatchStatus.MATCHED
+              AND m.mealDate = :today
+              AND m.groupId IS NOT NULL
+            """)
+    List<MatchRequest> findMatchedOnDate(@Param("today") LocalDate today);
+
     /** 편성 지표 로그용 대기자 총원 */
     long countByStatusAndExpiresAtAfter(MatchStatus status, LocalDateTime now);
 

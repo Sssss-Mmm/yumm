@@ -48,7 +48,7 @@ export JWT_SECRET=$(openssl rand -base64 32)   # HS256, 256비트
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | (비어 있음) |
 | `SMTP_FROM` | `no-reply@yumm.local` — 보통 `SMTP_USERNAME`과 같은 주소로 둔다 |
 
-**SMTP는 알림 메일(FR-N-01)용이다.** `SMTP_HOST`가 비어 있으면 `EmailServiceImpl`이 발송을
+**SMTP는 알림 메일(FR-N-01·02·04)용이다.** `SMTP_HOST`가 비어 있으면 `EmailServiceImpl`이 발송을
 건너뛰므로 로컬에서는 설정하지 않아도 매칭이 정상 동작한다. 발송이 실패해도 예외를 삼키고
 로그만 남긴다 — 알림은 부가 기능이라 매칭 편성 트랜잭션을 되돌리면 안 된다.
 
@@ -190,3 +190,26 @@ SELECT count(*) FROM users WHERE withdrawn_at IS NOT NULL;
 SELECT id, email, nickname, withdrawn_at FROM users WHERE withdrawn_at IS NOT NULL;
 ```
 
+**5) `match_requests` — `reminded_at` 컬럼 추가 (식사 당일 아침 리마인드)**
+
+FR-N-04. 하루 한 통을 넘기지 않기 위한 유일한 수단이라 이 컬럼이 없으면 10분마다 같은 사람에게
+리마인드가 다시 나간다. nullable이라 `ddl-auto=update`가 알아서 추가하지만, 배포 전에 확인해 두면
+첫 아침 주기에서 놀랄 일이 없다.
+
+```sql
+BEGIN;
+ALTER TABLE match_requests ADD COLUMN IF NOT EXISTS reminded_at timestamp;
+COMMIT;
+
+-- 확인. 기존 행은 전부 NULL(= 아직 안 보냄)이어야 한다.
+SELECT count(*) FROM match_requests WHERE reminded_at IS NOT NULL;
+```
+
+`NULL`이면 아직 안 보낸 것이고 값이 있으면 보낸 시각이다. **백필하지 않는다** — 다만 배포일 당일
+식사 예정인 기존 `MATCHED` 행은 전부 NULL이라 배포 직후 첫 주기(08:00 이후)에 리마인드를 한 통 받는다.
+그게 싫으면 배포 전에 그 행만 막아둔다.
+
+```sql
+UPDATE match_requests SET reminded_at = now()
+ WHERE status = 'MATCHED' AND meal_date = CURRENT_DATE;
+```

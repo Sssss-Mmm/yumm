@@ -79,9 +79,22 @@ public class MatchRequest {
     @Column(nullable = false)
     private boolean allowPair;
 
+    /**
+     * 식사 당일 아침 리마인드를 보낸 시각(FR-N-04). NULL이면 아직 안 보냈다는 뜻이다.
+     *
+     * ponytail: 하루 한 통 보장을 컬럼 하나로 끝낸다. 발송 이력 테이블도, Redis 키도 두지 않는다.
+     * 한 행의 mealDate는 바뀌지 않으므로 초기화할 일도 없다.
+     */
+    private LocalDateTime remindedAt;
+
     public void assignToGroup(String groupId) {
         this.groupId = groupId;
         this.status = MatchStatus.MATCHED;
+    }
+
+    /** 당일 아침 리마인드를 보냈다고 표시한다(FR-N-04). 다음 주기에 다시 뽑히지 않는다. */
+    public void markReminded(LocalDateTime at) {
+        this.remindedAt = at;
     }
 
     public void cancel() {

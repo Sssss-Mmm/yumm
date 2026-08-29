@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, blockUser, leaveGroup, myUserId, reportUser } from "../api";
+import { ApiError, api, blockUser, confirmEmailCode, leaveGroup, myUserId, reportUser, sendEmailCode } from "../api";
 import { btn, btnGhost, btnSm, card, h1, input, label, muted } from "../ui";
 
 // 서버 Region enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
@@ -35,6 +35,16 @@ type Status = {
   members: Member[];
 };
 
+// 인증 때문에 신청이 막히면 이 값을 들고 있다가 인증 성공 후 그대로 다시 보낸다.
+type ApplyPayload = {
+  region: FormDataEntryValue | null;
+  mealDate: FormDataEntryValue | null;
+  mealTime: FormDataEntryValue | null;
+  genderPreference: FormDataEntryValue | null;
+  foodPreferences: FormDataEntryValue[];
+  allowPair: boolean;
+};
+
 const today = new Date().toISOString().slice(0, 10);
 
 // 낯선 사람과 대면하는 서비스의 최소 고지. 한 번 확인하면 이 브라우저에서는 다시 띄우지 않는다.
@@ -59,6 +69,11 @@ const Match = () => {
   // ponytail: 신고/차단은 한 번에 하나. 그룹원별 상태 맵 대신 진행 중인 userId 하나만 들고 간다.
   const [busy, setBusy] = useState<number | null>(null);
   const [notice, setNotice] = useState<{ userId: number; text: string; ok: boolean } | null>(null);
+  // FR-M-14: 첫 신청 직전의 이메일 인증. pending이 있으면 인증 창이 뜨고, 통과하면 이 신청이 이어진다.
+  const [pending, setPending] = useState<ApplyPayload | null>(null);
+  const [sending, setSending] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyNotice, setVerifyNotice] = useState<{ text: string; ok: boolean } | null>(null);
   const prev = useRef<Status["status"] | null>(null);
   // members는 나를 포함한 그룹 전원이다. 자기 자신은 신고·차단 대상이 아니다(서버가 400).
   // 토큰이 없거나 깨져 null이면 누가 나인지 알 수 없으니 전원에게 그대로 노출한다 — 서버가 막는다.
@@ -89,6 +104,38 @@ const Match = () => {
     return () => clearInterval(id);
   }, [status?.status]);
 
+  const sendCode = async () => {
+    setSending(true);
+    setVerifyNotice(null);
+    try {
+      await sendEmailCode();
+      setVerifyNotice({ text: "인증 코드를 메일로 보냈습니다. 메일함을 확인해 주세요.", ok: true });
+    } catch (err) {
+      setVerifyNotice({ text: (err as Error).message, ok: false });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // 신청은 이 함수 하나로만 나간다 — 최초 제출도, 인증 통과 후 재시도도 같은 payload를 쓴다.
+  const submit = async (payload: ApplyPayload) => {
+    try {
+      const next = await api<Status>("/match", "POST", payload);
+      setPending(null);
+      prev.current = next.status;
+      setStatus(next);
+    } catch (err) {
+      if (err instanceof ApiError && err.code === "EMAIL_NOT_VERIFIED") {
+        setPending(payload);   // 폼은 그대로 둔 채 인증 창만 덮는다 (입력값 보존)
+        await sendCode();
+        return;
+      }
+      // 인증과 무관한 실패는 인증 창을 닫고 폼 위에 보여준다 — 창이 덮고 있으면 에러가 안 보인다.
+      setPending(null);
+      setError((err as Error).message);
+    }
+  };
+
   const apply = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError("");
@@ -99,20 +146,30 @@ const Match = () => {
       if (!confirm(SAFETY_NOTICE)) return;
       localStorage.setItem(SAFETY_ACK_KEY, "1");
     }
+    await submit({
+      region: form.get("region"),
+      mealDate: form.get("mealDate"),
+      mealTime: form.get("mealTime"),
+      genderPreference: form.get("genderPreference"),
+      foodPreferences: form.getAll("foodPreferences"),
+      // 체크 안 하면 FormData에 키 자체가 없다 → false (FR-M-12 기본값)
+      allowPair: form.has("allowPair"),
+    });
+  };
+
+  const verify = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!pending) return;
+    const code = String(new FormData(e.currentTarget).get("code") ?? "").trim();
+    setVerifying(true);
+    setVerifyNotice(null);
     try {
-      const next = await api<Status>("/match", "POST", {
-        region: form.get("region"),
-        mealDate: form.get("mealDate"),
-        mealTime: form.get("mealTime"),
-        genderPreference: form.get("genderPreference"),
-        foodPreferences: form.getAll("foodPreferences"),
-        // 체크 안 하면 FormData에 키 자체가 없다 → false (FR-M-12 기본값)
-        allowPair: form.has("allowPair"),
-      });
-      prev.current = next.status;
-      setStatus(next);
+      await confirmEmailCode(code);
+      await submit(pending);   // 사용자가 하려던 신청을 그대로 이어서 보낸다
     } catch (err) {
-      setError((err as Error).message);
+      setVerifyNotice({ text: (err as Error).message, ok: false });
+    } finally {
+      setVerifying(false);
     }
   };
 
@@ -288,6 +345,7 @@ const Match = () => {
   }
 
   return (
+    <>
     <form onSubmit={apply} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h1 className={h1}>밥메이트 신청</h1>
@@ -358,6 +416,56 @@ const Match = () => {
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button className={btn}>신청하기</button>
     </form>
+
+    {/* 폼 위에 덮기만 한다 — 폼을 언마운트하면 채워둔 값이 날아간다 */}
+    {pending && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-stone-900/40 p-4">
+        <div role="dialog" aria-modal="true" aria-label="이메일 인증" className={`${card} w-full max-w-sm flex flex-col gap-3`}>
+          <div className="flex flex-col gap-1">
+            <h2 className="text-lg font-bold tracking-tight">이메일 인증</h2>
+            <p className={muted}>
+              신청 전에 한 번만 확인해요. 가입한 메일로 보낸 인증 코드를 입력해 주세요.
+            </p>
+          </div>
+          <form onSubmit={verify} className="flex flex-col gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className={label}>인증 코드</span>
+              <input
+                name="code"
+                required
+                autoFocus
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                placeholder="메일로 받은 코드"
+                className={input}
+              />
+            </label>
+            {verifyNotice && (
+              <p className={`text-sm ${verifyNotice.ok ? "text-emerald-700" : "text-red-600"}`}>
+                {verifyNotice.text}
+              </p>
+            )}
+            <button disabled={verifying || sending} className={btn}>
+              {verifying ? "확인 중…" : "인증하고 신청하기"}
+            </button>
+          </form>
+          <div className="flex gap-2">
+            <button type="button" onClick={sendCode} disabled={sending || verifying} className={`${btnGhost} flex-1`}>
+              {sending ? "보내는 중…" : "코드 재발송"}
+            </button>
+            <button
+              type="button"
+              onClick={() => { setPending(null); setVerifyNotice(null); }}
+              disabled={verifying}
+              className={`${btnGhost} flex-1`}
+            >
+              나중에 하기
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 };
 

@@ -9,6 +9,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.util.List;
 
 /**
@@ -23,6 +24,11 @@ import java.util.List;
 public class MatchScheduler {
 
     private static final long INTERVAL_MS = 30_000;
+
+    private static final long REMIND_INTERVAL_MS = 600_000;
+
+    /** 이 시각 전에는 리마인드를 보내지 않는다. "당일 아침"의 아침이 이것뿐이다. */
+    private static final LocalTime REMIND_FROM = LocalTime.of(8, 0);
 
     private final MatchRequestRepository matchRequestRepository;
     private final MatchService matchService;
@@ -58,6 +64,29 @@ public class MatchScheduler {
         } catch (RuntimeException e) {
             // 스케줄러 밖으로 예외를 내보내지 않는다. @Scheduled이 남기는 로그로는 원인 추적이 안 된다.
             log.error("[매칭 편성] 주기 실패, 다음 주기에 재시도", e);
+        }
+    }
+
+    /**
+     * 오늘 식사 예정인 그룹에 당일 아침 리마인드를 보낸다(FR-N-04).
+     *
+     * ponytail: 하루 한 번 도는 cron이 아니라 10분 간격 + 아침 이후 조건이다. 8시에 서버가
+     * 내려가 있어도 올라오는 즉시 그날 리마인드가 나간다. 중복은 MatchService가 remindedAt으로 막으므로
+     * 여러 번 도는 것 자체는 안전하다.
+     */
+    @Scheduled(fixedDelay = REMIND_INTERVAL_MS)
+    public void remindTodayMeals() {
+        if (LocalTime.now().isBefore(REMIND_FROM)) {
+            return;
+        }
+        try {
+            int sent = matchService.remindTodayMeals();
+            if (sent > 0) {
+                log.info("[식사 리마인드] {}건 발송", sent);
+            }
+        } catch (RuntimeException e) {
+            // 리마인드가 실패해도 편성은 계속 돌아야 한다. 실패한 주기는 10분 뒤 그대로 재시도된다.
+            log.error("[식사 리마인드] 주기 실패, 다음 주기에 재시도", e);
         }
     }
 }

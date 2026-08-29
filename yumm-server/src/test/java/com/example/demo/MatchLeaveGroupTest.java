@@ -2,6 +2,8 @@ package com.example.demo;
 
 import com.example.demo.domain.MatchRequest;
 import com.example.demo.domain.MatchStatus;
+import com.example.demo.domain.MealTime;
+import com.example.demo.domain.Region;
 import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.MatchRequestRepository;
@@ -46,6 +48,9 @@ class MatchLeaveGroupTest {
     private static MatchRequest matched(long id, LocalDate mealDate) {
         MatchRequest request = MatchRequest.builder()
                 .id(id)
+                // 알림 본문(FR-N-02)이 읽는다. 실제 행에서는 NOT NULL이라 목에서도 채운다.
+                .region(Region.GANGNAM)
+                .mealTime(MealTime.LUNCH)
                 .mealDate(mealDate)
                 .status(MatchStatus.WAITING)
                 .createdAt(LocalDateTime.now())

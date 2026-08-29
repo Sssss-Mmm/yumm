@@ -40,6 +40,9 @@ public class MatchServiceImpl implements MatchService {
     private static final int WAIT_MINUTES = 30;
 
     private static final String MATCHED_SUBJECT = "[yumm] 밥메이트 매칭이 성사됐어요";
+    private static final String MEMBER_LEFT_SUBJECT = "[yumm] 밥메이트 구성원 한 명이 나갔어요";
+    private static final String DISBANDED_SUBJECT = "[yumm] 밥메이트 그룹이 해체됐어요";
+    private static final String REMINDER_SUBJECT = "[yumm] 오늘 밥메이트 약속이 있어요";
 
     private final MatchRequestRepository matchRequestRepository;
     private final UserRepository userRepository;
@@ -115,8 +118,8 @@ public class MatchServiceImpl implements MatchService {
         return groups.size();
     }
 
-    /** 매칭 성사 알림 한 통(FR-N-01). 본문은 그룹당 같고 받는 사람만 다르다. */
-    private record Notice(String to, String body) {}
+    /** 알림 메일 한 통. 본문은 그룹당 같고 받는 사람만 다르다. */
+    private record Notice(String to, String subject, String body) {}
 
     private List<Notice> matchedNotices(List<GroupMatcher.Candidate> group, Map<Long, MatchRequest> byId,
                                         Region region, LocalDate mealDate, MealTime mealTime) {
@@ -132,13 +135,20 @@ public class MatchServiceImpl implements MatchService {
                 yumm에서 그룹 채팅으로 만날 곳을 정해 보세요.
                 """.formatted(region.getDescription(), mealDate, mealTime.getDescription(), group.size());
 
-        // 이메일이 없는 행이 하나 있다고 편성 트랜잭션이 NPE로 깨지면 안 된다. 그 사람만 건너뛴다.
-        return group.stream()
-                .map(c -> byId.get(c.id()).getUser())
+        return notices(group.stream().map(c -> byId.get(c.id())).toList(), MATCHED_SUBJECT, body);
+    }
+
+    /**
+     * 받는 사람 목록을 신청 행에서 뽑는다. 이메일이 없는 행이 하나 있다고 호출한 쪽 트랜잭션이
+     * NPE로 깨지면 안 되므로 그 사람만 건너뛴다.
+     */
+    private static List<Notice> notices(List<MatchRequest> targets, String subject, String body) {
+        return targets.stream()
+                .map(MatchRequest::getUser)
                 .filter(Objects::nonNull)
                 .map(User::getEmail)
                 .filter(Objects::nonNull)
-                .map(email -> new Notice(email, body))
+                .map(email -> new Notice(email, subject, body))
                 .toList();
     }
 
@@ -166,7 +176,7 @@ public class MatchServiceImpl implements MatchService {
     }
 
     private void send(List<Notice> notices) {
-        notices.forEach(n -> emailService.send(n.to(), MATCHED_SUBJECT, n.body()));
+        notices.forEach(n -> emailService.send(n.to(), n.subject(), n.body()));
     }
 
     @Override
@@ -207,6 +217,8 @@ public class MatchServiceImpl implements MatchService {
         request.leaveGroup();
 
         if (remaining.size() >= GroupMatcher.MIN_SIZE) {
+            // 그룹은 유지된다. 나간 사람이 누구인지는 알리지 않는다 — 닉네임도 신원이다(NFR-05).
+            notifyAfterCommit(notices(remaining, MEMBER_LEFT_SUBJECT, memberLeftBody(request, remaining.size())));
             return;
         }
 
@@ -215,15 +227,105 @@ public class MatchServiceImpl implements MatchService {
         // 업그레이드 경로: 그룹에 속성(식당, 확정)이 생기면 MatchGroup 엔티티로 승격해 그 행을 잠근다.
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime expiresAt = now.plusMinutes(WAIT_MINUTES);
+        // 한 그룹은 한 버킷에서 나오므로 mealDate가 전원 같다. 판정을 한 번만 하고 본문에도 그대로 쓴다.
+        boolean pastMeal = request.isPastMeal(now.toLocalDate());
         remaining.forEach(m -> {
             // 지난 끼니를 대기열로 되돌리면 findWaitingBuckets가 과거 날짜 버킷을 뱉어 스케줄러가
             // 지난 날짜 그룹을 새로 편성하고, 이미 재신청한 사람은 WAITING 2건이 된다(BR-01 위반).
-            if (m.isPastMeal(now.toLocalDate())) {
+            if (pastMeal) {
                 m.cancel();
             } else {
                 m.returnToWaiting(expiresAt);
             }
         });
+        // 해체는 남은 전원에게 알린다. 앱을 열지 않으면 약속이 사라진 걸 알 방법이 없다(FR-N-02).
+        notifyAfterCommit(notices(remaining, DISBANDED_SUBJECT, disbandedBody(request, pastMeal)));
+    }
+
+    /** 구성원 이탈, 그룹 유지(FR-N-02). 나간 사람이 아니라 "몇 명이 남았는지"만 알린다. */
+    private static String memberLeftBody(MatchRequest request, int remaining) {
+        return """
+                밥메이트 구성원 한 명이 그룹에서 나갔어요. 약속은 그대로 유지됩니다.
+
+                지역: %s
+                날짜: %s
+                끼니: %s
+                남은 인원: %d명
+
+                yumm에서 그룹 채팅으로 이어서 이야기해 보세요.
+                """.formatted(request.getRegion().getDescription(), request.getMealDate(),
+                request.getMealTime().getDescription(), remaining);
+    }
+
+    /** 최소 인원 미달로 해체(FR-N-02). 대기열로 돌아간다는 사실까지 적는다(FR-C-03). */
+    private static String disbandedBody(MatchRequest request, boolean pastMeal) {
+        String tail = pastMeal
+                ? "이미 지난 끼니라 다시 매칭하지 않아요. 새 약속은 다시 신청해 주세요."
+                : "자동으로 대기열에 다시 올려뒀어요. %d분 안에 새 그룹이 만들어지면 다시 알려드릴게요."
+                        .formatted(WAIT_MINUTES);
+
+        return """
+                인원이 최소 인원(%d명) 미만이 되어 밥메이트 그룹이 해체됐어요.
+
+                지역: %s
+                날짜: %s
+                끼니: %s
+
+                %s
+                """.formatted(GroupMatcher.MIN_SIZE, request.getRegion().getDescription(), request.getMealDate(),
+                request.getMealTime().getDescription(), tail);
+    }
+
+    /**
+     * 오늘 식사 예정인 성사된 신청에 리마인드를 보낸다(FR-N-04). 보낸 통수를 돌려준다.
+     *
+     * 만날 시각은 시스템에 없다(MealTime은 점심/저녁뿐). 그래서 본문에 시각을 적지 않고
+     * 지역·날짜·끼니·인원까지만 넣는다. 중복 발송은 remindedAt 컬럼 하나로 막는다.
+     */
+    @Override
+    @Transactional
+    public int remindTodayMeals() {
+        LocalDateTime now = LocalDateTime.now();
+        List<MatchRequest> matchedToday = matchRequestRepository.findMatchedOnDate(now.toLocalDate());
+        if (matchedToday.isEmpty()) {
+            return 0;
+        }
+
+        Map<String, Long> sizeByGroup = matchedToday.stream()
+                .collect(Collectors.groupingBy(MatchRequest::getGroupId, Collectors.counting()));
+
+        List<Notice> pending = new ArrayList<>();
+        for (MatchRequest m : matchedToday) {
+            if (m.getRemindedAt() != null) {
+                continue;
+            }
+            // 보냈다는 표시를 발송보다 먼저 커밋한다. 반대로 하면 커밋 실패 시 같은 사람에게 매 주기 또 나간다.
+            // 한계: 커밋 뒤 발송 전에 프로세스가 죽으면 그 통은 사라진다. 리마인드는 재발송보다 중복이 나쁘다.
+            m.markReminded(now);
+            pending.addAll(notices(List.of(m), REMINDER_SUBJECT,
+                    reminderBody(m, sizeByGroup.getOrDefault(m.getGroupId(), 1L))));
+        }
+
+        notifyAfterCommit(pending);
+        return pending.size();
+    }
+
+    /**
+     * ponytail: 오늘 아침 이후에 성사된 그룹도 한 통 받는다. 매칭 성사 메일(FR-N-01)과 내용이 겹치지만
+     * 하루 한 통을 넘지 않고, 겹침을 없애려면 "언제 성사됐는지"를 또 저장해야 한다.
+     */
+    private static String reminderBody(MatchRequest request, long groupSize) {
+        return """
+                오늘 밥메이트 약속이 있어요.
+
+                지역: %s
+                날짜: %s
+                끼니: %s
+                인원: %d명
+
+                만날 시간과 장소는 yumm 그룹 채팅에서 확인하세요.
+                """.formatted(request.getRegion().getDescription(), request.getMealDate(),
+                request.getMealTime().getDescription(), groupSize);
     }
 
     /** 이 버킷 대기자들 사이의 차단 관계. 후보 쌍마다 조회하면 버킷 크기의 제곱만큼 쿼리가 나간다. */

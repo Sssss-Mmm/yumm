@@ -29,4 +29,10 @@ public interface MatchService {
      * 남은 구성원을 대기열로 되돌린다(FR-C-03).
      */
     void leaveGroup(Long userId);
+
+    /**
+     * 오늘 식사 예정인 성사된 신청에 당일 아침 리마인드를 보낸다(FR-N-04). 보낸 통수를 돌려준다.
+     * 한 신청당 하루 한 통이며, 스케줄러가 자주 호출해도 두 번 나가지 않는다.
+     */
+    int remindTodayMeals();
 }

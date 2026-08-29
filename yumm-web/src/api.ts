@@ -20,6 +20,15 @@ export async function logout() {
   }
 }
 
+/** 서버 에러의 `error` 코드를 살려둔다. 화면이 코드로 분기해야 할 때가 있다(EMAIL_NOT_VERIFIED 등). */
+export class ApiError extends Error {
+  code?: string;
+  constructor(message: string, code?: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 /** 서버 공통 응답은 { message, data }, 에러는 { error, message } */
 export async function api<T>(path: string, method = "GET", body?: unknown): Promise<T> {
   const token = getToken();
@@ -38,7 +47,7 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
     throw new Error("로그인이 필요합니다.");
   }
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.message ?? `요청 실패 (${res.status})`);
+  if (!res.ok) throw new ApiError(json.message ?? `요청 실패 (${res.status})`, json.error);
   return json.data as T;
 }
 
@@ -108,3 +117,13 @@ export const reportUser = (reportedUserId: number, reason: string, detail?: stri
 
 /** 차단. 멱등이며 해제 API는 없다. 이후 편성에만 반영되고 현재 그룹은 유지된다. */
 export const blockUser = (userId: number) => api<void>(`/blocks/${userId}`, "POST");
+
+/**
+ * 이메일 인증 코드 발송(FR-M-14). 가입이 아니라 첫 매칭 신청 직전에만 호출한다.
+ * 바디는 없다 — 대상 주소는 서버가 토큰의 사용자에서 가져온다.
+ */
+export const sendEmailCode = () => api<void>("/user/verify-email", "POST");
+
+/** 받은 코드 확인. 성공하면 그 뒤의 매칭 신청이 통과한다(미인증이면 403 EMAIL_NOT_VERIFIED). */
+export const confirmEmailCode = (code: string) =>
+  api<void>("/user/verify-email/confirm", "POST", { code });
