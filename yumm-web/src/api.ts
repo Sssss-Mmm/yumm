@@ -44,6 +44,17 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
 
 // ponytail: 리프레시 토큰 흐름 없음. 액세스 토큰 만료(10시간)되면 그냥 다시 로그인.
 
+/** 회원가입. agreedToTerms는 필수 동의라 서버가 false면 400을 준다. */
+export type SignupRequest = {
+  email: string;
+  password: string;
+  nickname: string;
+  gender: string;
+  birthYear: number;
+  agreedToTerms: boolean;
+};
+export const signup = (body: SignupRequest) => api<void>("/user/signup", "POST", body);
+
 /** 매칭된 그룹에서 이탈한다. 남은 인원은 서버가 다시 WAITING으로 되돌린다. */
 export const leaveGroup = () => api<void>("/match/group", "DELETE");
 

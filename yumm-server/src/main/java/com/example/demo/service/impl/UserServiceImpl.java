@@ -14,6 +14,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 
+import java.time.LocalDateTime;
 import java.time.Year;
 
 
@@ -61,6 +62,7 @@ public class UserServiceImpl implements UserService {
                 .birthYear(signupRequest.getBirthYear())
                 .profileImageUrl(signupRequest.getProfileImageUrl()) 
                 .role(defaultRole)
+                .termsAgreedAt(LocalDateTime.now()) // 동의 여부는 @AssertTrue가 걸러내므로 여기 오면 동의한 것이다
                 .build();
 
         // 회원 정보 DB에 저장

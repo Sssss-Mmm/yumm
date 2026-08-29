@@ -6,6 +6,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDateTime;
+
 @Entity // JPA 엔티티(=DB 테이블과 매핑) 
 @Table(name = "users")
 @Getter 
@@ -40,6 +42,9 @@ public class User {
     @Enumerated(EnumType.STRING) // Enum의 이름을 DB에 문자열로 저장하도록 지시
     @Column(nullable = false, length = 20) // DB 컬럼 설정
     private UserRole role; // 사용자 권한 (ex: ROLE_USER, ROLE_ADMIN)
+
+    // 기존 가입자에게는 받은 기록이 없으므로 nullable로 둔다. NULL = 동의 기록 없음.
+    private LocalDateTime termsAgreedAt; // 이용약관 동의 시각(가입 시점)
 
 
 

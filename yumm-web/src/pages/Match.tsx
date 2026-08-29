@@ -37,6 +37,20 @@ type Status = {
 
 const today = new Date().toISOString().slice(0, 10);
 
+// 낯선 사람과 대면하는 서비스의 최소 고지. 한 번 확인하면 이 브라우저에서는 다시 띄우지 않는다.
+// ponytail: localStorage 플래그 하나. 기기별로 다시 뜨는 건 감수한다 — 서버 저장은 요청받지 않았다.
+const SAFETY_ACK_KEY = "safetyNoticeAcknowledged";
+const SAFETY_NOTICE = [
+  "만나기 전 안전 수칙을 확인해 주세요.",
+  "",
+  "· 첫 만남은 사람이 많은 공공장소에서 하세요.",
+  "· 집 주소, 직장 등 개인정보는 공유하지 마세요.",
+  "· 불편하면 언제든 그룹에서 나가고 신고할 수 있습니다.",
+  "· 금전 거래, 영업·홍보, 데이팅 목적의 이용은 금지입니다.",
+  "",
+  "확인을 누르면 신청이 접수됩니다.",
+].join("\n");
+
 const Match = () => {
   const [status, setStatus] = useState<Status | null>(null);
   const [error, setError] = useState("");
@@ -80,6 +94,11 @@ const Match = () => {
     setError("");
     setDisbanded(false);
     const form = new FormData(e.currentTarget);
+    // 신청이 나가기 전에 고지한다. 취소하면 아무것도 보내지 않는다.
+    if (!localStorage.getItem(SAFETY_ACK_KEY)) {
+      if (!confirm(SAFETY_NOTICE)) return;
+      localStorage.setItem(SAFETY_ACK_KEY, "1");
+    }
     try {
       const next = await api<Status>("/match", "POST", {
         region: form.get("region"),
