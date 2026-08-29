@@ -5,6 +5,11 @@ import {
   type MatchMember as Member, type MatchStatus,
 } from "../api";
 import { btn, btnGhost, btnSm, card, h1, input, label, muted } from "../ui";
+import { useCountdown } from "../useCountdown";
+
+// 서버 재발송 쿨다운과 같은 값. 발송에 성공하면 서버가 거부하기 전에 화면이 먼저 막는다.
+// 서버가 429로 남은 초를 주면 그 값이 이 값을 덮어쓴다.
+const RESEND_COOLDOWN_SECONDS = 60;
 
 // 서버 Region enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
 // ponytail: 목록은 프론트 상수. 지역이 자주 바뀌면 그때 서버에서 내려받는다.
@@ -74,6 +79,10 @@ const Match = () => {
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verifyNotice, setVerifyNotice] = useState<{ text: string; ok: boolean } | null>(null);
+  // 재발송까지 남은 초. 재발송 성공(60초)과 서버 429(retryAfterSeconds) 양쪽에서 세팅된다.
+  const [resendIn, startResendCooldown] = useCountdown();
+  // 코드를 5회 틀려 그 코드가 폐기된 상태. 재발송 쿨다운과는 다른 상황이다.
+  const [codeExpired, setCodeExpired] = useState(false);
   const prev = useRef<Status["status"] | null>(null);
   // members는 나를 포함한 그룹 전원이다. 자기 자신은 신고·차단 대상이 아니다(서버가 400).
   // 토큰이 없거나 깨져 null이면 누가 나인지 알 수 없으니 전원에게 그대로 노출한다 — 서버가 막는다.
@@ -109,8 +118,14 @@ const Match = () => {
     setVerifyNotice(null);
     try {
       await sendEmailCode();
+      setCodeExpired(false);   // 새 코드가 나갔으니 폐기 상태 해제
+      startResendCooldown(RESEND_COOLDOWN_SECONDS);
       setVerifyNotice({ text: "인증 코드를 메일로 보냈습니다. 메일함을 확인해 주세요.", ok: true });
     } catch (err) {
+      // 다른 탭/기기에서 이미 보냈다면 화면의 로컬 타이머는 틀렸다. 서버가 준 값으로 덮어쓴다.
+      if (err instanceof ApiError && err.retryAfterSeconds !== undefined) {
+        startResendCooldown(err.retryAfterSeconds);
+      }
       setVerifyNotice({ text: (err as Error).message, ok: false });
     } finally {
       setSending(false);
@@ -167,6 +182,11 @@ const Match = () => {
       await confirmEmailCode(code);
       await submit(pending);   // 사용자가 하려던 신청을 그대로 이어서 보낸다
     } catch (err) {
+      // 5회 오입력이면 이 코드는 폐기다 — 재발송 쿨다운과 섞어서 안내하지 않는다.
+      if (err instanceof ApiError) {
+        if (err.retryAfterSeconds !== undefined) startResendCooldown(err.retryAfterSeconds);
+        if (err.code === "TOO_MANY_VERIFICATION_ATTEMPTS") setCodeExpired(true);
+      }
       setVerifyNotice({ text: (err as Error).message, ok: false });
     } finally {
       setVerifying(false);
@@ -440,17 +460,26 @@ const Match = () => {
                 className={input}
               />
             </label>
-            {verifyNotice && (
+            {codeExpired ? (
+              <p className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800">
+                {verifyNotice?.text} 이 코드는 폐기됐어요. 아래에서 새 코드를 받아 다시 입력해 주세요.
+              </p>
+            ) : verifyNotice && (
               <p className={`text-sm ${verifyNotice.ok ? "text-emerald-700" : "text-red-600"}`}>
                 {verifyNotice.text}
               </p>
             )}
-            <button disabled={verifying || sending} className={btn}>
-              {verifying ? "확인 중…" : "인증하고 신청하기"}
+            <button disabled={verifying || sending || codeExpired} className={btn}>
+              {verifying ? "확인 중…" : codeExpired ? "새 코드가 필요해요" : "인증하고 신청하기"}
             </button>
           </form>
           <div className="flex gap-2">
-            <button type="button" onClick={sendCode} disabled={sending || verifying} className={`${btnGhost} flex-1`}>
+            <button
+              type="button"
+              onClick={sendCode}
+              disabled={sending || verifying || resendIn > 0}
+              className={`${btnGhost} flex-1`}
+            >
               {sending ? "보내는 중…" : "코드 재발송"}
             </button>
             <button
@@ -462,6 +491,10 @@ const Match = () => {
               나중에 하기
             </button>
           </div>
+          {/* 숫자만 문장 끝에 둔다 — 자릿수가 바뀌어도 앞 글자가 밀리지 않는다(360px) */}
+          {resendIn > 0 && (
+            <p className={`${muted} tabular-nums`}>재발송 가능까지 {resendIn}초</p>
+          )}
         </div>
       </div>
     )}

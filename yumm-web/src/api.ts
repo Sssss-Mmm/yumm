@@ -23,9 +23,15 @@ export async function logout() {
 /** 서버 에러의 `error` 코드를 살려둔다. 화면이 코드로 분기해야 할 때가 있다(EMAIL_NOT_VERIFIED 등). */
 export class ApiError extends Error {
   code?: string;
-  constructor(message: string, code?: string) {
+  /**
+   * 429(쿨다운·잠금) 응답의 남은 대기 초. 서버가 주지 않으면 undefined다.
+   * 화면은 이 값이 없으면 남은 시간을 지어내 표시하지 않는다.
+   */
+  retryAfterSeconds?: number;
+  constructor(message: string, code?: string, retryAfterSeconds?: number) {
     super(message);
     this.code = code;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 
@@ -47,7 +53,13 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
     throw new Error("로그인이 필요합니다.");
   }
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(json.message ?? `요청 실패 (${res.status})`, json.error);
+  if (!res.ok) {
+    throw new ApiError(
+      json.message ?? `요청 실패 (${res.status})`,
+      json.error,
+      typeof json.retryAfterSeconds === "number" ? json.retryAfterSeconds : undefined,
+    );
+  }
   return json.data as T;
 }
 
