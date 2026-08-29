@@ -188,7 +188,7 @@
 
 | ID | 요구사항 | 우선 | 상태 | 비고 |
 |---|---|---|---|---|
-| FR-D-01 | 신고 목록을 조회·처리한다 | P1 | ❌ | |
+| FR-D-01 | 신고 목록을 조회·처리한다 | P1 | ✅ | `GET /api/admin/reports`(기본 미처리만, `includeHandled=true`로 전체) + `POST /api/admin/reports/{id}/handle`. 웹은 `/admin`. 처리 상태는 `reports.handled_at` 하나로 표현한다 |
 | FR-D-02 | 계정을 정지·해제한다 | P1 | ❌ | |
 | FR-D-03 | 지역·시간대별 신청 수, 매칭 성사율, 평균 대기시간을 조회한다 | P1 | ❌ | 버킷 설계가 맞는지 판단할 유일한 근거 |
 

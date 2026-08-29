@@ -38,7 +38,9 @@ public enum ErrorCode {
 
     CHAT_ROOM_FORBIDDEN(HttpStatus.FORBIDDEN, "이 채팅방에 참여할 권한이 없습니다."),
 
-    MESSAGE_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "메시지 전송이 실패했습니다.");
+    MESSAGE_SEND_FAILED(HttpStatus.INTERNAL_SERVER_ERROR, "메시지 전송이 실패했습니다."),
+
+    REPORT_NOT_FOUND(HttpStatus.NOT_FOUND, "신고 내역을 찾을 수 없습니다.");
 
     
 

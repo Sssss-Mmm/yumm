@@ -1,5 +1,5 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { getToken, logout } from "../api";
+import { getToken, isAdmin, logout } from "../api";
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -22,6 +22,7 @@ const Navbar = () => {
         </Link>
         <div className="flex items-center gap-5">
           <Link to="/match" className={link(pathname.startsWith("/match"))}>밥메이트</Link>
+          {isAdmin() && <Link to="/admin" className={link(pathname === "/admin")}>신고</Link>}
           {getToken()
             ? <button onClick={signOut} className={link(false)}>로그아웃</button>
             : <Link to="/login" className={link(pathname === "/login")}>로그인</Link>}

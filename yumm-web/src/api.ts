@@ -44,6 +44,50 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
 
 // ponytail: 리프레시 토큰 흐름 없음. 액세스 토큰 만료(10시간)되면 그냥 다시 로그인.
 
+/**
+ * 액세스 토큰의 페이로드를 읽는다. 서명은 검증하지 않는다 — 화면 분기용이고
+ * 실제 권한 판정은 서버가 한다(관리자 API는 SecurityConfig가 막는다).
+ */
+function claims(): Record<string, unknown> | null {
+  const payload = getToken()?.split(".")[1];
+  if (!payload) return null;
+  try {
+    return JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/")));
+  } catch {
+    return null;
+  }
+}
+
+/** 로그인 토큰의 sub 클레임 = 내 userId. 내 메시지 구분용. */
+export function myUserId(): number | null {
+  const id = Number(claims()?.sub);
+  return Number.isFinite(id) ? id : null;
+}
+
+/** 관리자 메뉴를 보여줄지 결정한다. 화면 표시용일 뿐 접근 제어가 아니다. */
+export const isAdmin = () =>
+  (claims()?.roles as string[] | undefined)?.includes("ROLE_ADMIN") ?? false;
+
+export type AdminReport = {
+  id: number;
+  reporterId: number;
+  reporterNickname: string;
+  reportedId: number;
+  reportedNickname: string;
+  reason: string;
+  reasonLabel: string;
+  detail: string | null;
+  createdAt: string;
+  handledAt: string | null;
+};
+
+/** 신고 목록(FR-D-01). 기본은 미처리만. */
+export const getReports = (includeHandled = false) =>
+  api<AdminReport[]>(`/admin/reports?includeHandled=${includeHandled}`);
+
+export const handleReport = (id: number) =>
+  api<AdminReport>(`/admin/reports/${id}/handle`, "POST");
+
 /** 회원가입. agreedToTerms는 필수 동의라 서버가 false면 400을 준다. */
 export type SignupRequest = {
   email: string;

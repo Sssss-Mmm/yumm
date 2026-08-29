@@ -12,8 +12,9 @@ import java.time.LocalDateTime;
 /**
  * 사용자 신고 1건(FR-S-01).
  *
- * ponytail: 처리 상태 컬럼은 두지 않는다. 관리자 화면(FR-S-04)이 없어 아무도 읽지 않는 값이고,
- * 지금 신고의 목적은 기록을 남기는 것이다. 관리자 화면이 생기면 그때 상태를 붙인다.
+ * 처리 상태는 {@code handledAt} 하나로 표현한다. null이면 미처리다.
+ * ponytail: 상태 enum(대기/처리중/완료)도 처리자 FK도 두지 않는다. 관리자가 한 명이고
+ * 실제로 필요한 판단은 "이 신고를 봤는가"뿐이다. 처리 이력이 필요해지면 그때 테이블을 판다.
  */
 @Entity
 @Table(name = "reports")
@@ -46,4 +47,12 @@ public class Report {
 
     @Column(nullable = false)
     private LocalDateTime createdAt;
+
+    /** 관리자가 확인한 시각. null이면 미처리(FR-D-01). */
+    private LocalDateTime handledAt;
+
+    /** 이미 처리된 신고를 다시 처리해도 최초 처리 시각을 덮어쓰지 않는다. */
+    public void markHandled(LocalDateTime at) {
+        if (handledAt == null) handledAt = at;
+    }
 }

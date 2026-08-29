@@ -96,12 +96,22 @@ public class SecurityConfig {
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() 
                 // 공개 URLS에 정의된 경로들은 인증 없이 접근 허용
                 .requestMatchers(PUBLIC_URLS).permitAll()
+                // 관리자 전용(FR-D-01). 컨트롤러에서 권한을 다시 보지 않으므로 여기가 유일한 관문이다.
+                .requestMatchers("/api/admin/**").hasRole("ADMIN")
                 // 그 외 모든 요청은 인증된 사용자만 접근 허용
                 .anyRequest().authenticated()
             )
             // 예외 처리 설정: 인증되지 않은 접근 시 401 UNAUTHORIZED 반환
             .exceptionHandling(ex -> ex
+                // 인증이 없거나 토큰이 깨진 경우 → 401. 프론트는 이걸 보고 로그인으로 보낸다.
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
+                // 로그인은 했는데 권한이 모자란 경우 → 403. 핸들러를 안 주면 이 경우까지
+                // 엔트리포인트로 흘러 401이 나가고, 프론트가 멀쩡한 세션을 지워버린다.
+                //
+                // sendError를 쓰면 안 된다. /error로 포워딩이 일어나고 그 요청이 보안 체인을
+                // 익명으로 다시 타면서(anyRequest().authenticated()) 403이 401로 덮인다.
+                .accessDeniedHandler((request, response, denied) ->
+                        response.setStatus(HttpStatus.FORBIDDEN.value()))
             )
             // 커스텀 JWT 인증 필터 등록: UsernamePasswordAuthenticationFilter 이전에 실행
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

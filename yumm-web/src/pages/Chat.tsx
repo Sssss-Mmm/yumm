@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api } from "../api";
-import { connectChat, myUserId, type ChatMessage } from "../ws";
+import { api, myUserId } from "../api";
+import { connectChat, type ChatMessage } from "../ws";
 import { btn, btnGhost, h1, input } from "../ui";
 
 const time = (sentAt: string) => {

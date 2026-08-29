@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { api, blockUser, leaveGroup, reportUser } from "../api";
-import { myUserId } from "../ws";
+import { api, blockUser, leaveGroup, myUserId, reportUser } from "../api";
 import { btn, btnGhost, btnSm, card, h1, input, label, muted } from "../ui";
 
 // 서버 Region enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.

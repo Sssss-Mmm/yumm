@@ -30,18 +30,6 @@ function parse(raw: string) {
   return { command: lines[0].trim(), headers, body: raw.slice(split + 2) };
 }
 
-/** 로그인 토큰의 sub 클레임 = 내 userId. 내 메시지 구분용이고, 실제 검증은 서버가 한다. */
-export function myUserId(): number | null {
-  const payload = getToken()?.split(".")[1];
-  if (!payload) return null;
-  try {
-    const id = Number(JSON.parse(atob(payload.replace(/-/g, "+").replace(/_/g, "/"))).sub);
-    return Number.isFinite(id) ? id : null;
-  } catch {
-    return null;
-  }
-}
-
 type Handlers = {
   onOpen: () => void;
   onMessage: (msg: ChatMessage) => void;
