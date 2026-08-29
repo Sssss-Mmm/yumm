@@ -1,5 +1,0 @@
-fastapi
-uvicorn
-faiss-cpu # or faiss-gpu (추후 GPU 환경일 시)
-numpy
-# 그 외 필요한 라이브러리 하단에 추가(ex - numpy, scikit-learn 등)

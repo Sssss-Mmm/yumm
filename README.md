@@ -11,7 +11,6 @@
 |---|---|---|
 | `yumm-server` | Spring Boot 3.4.5 / Java 17 / Maven | JPA + PostgreSQL, Redis, Spring Security + JJWT, STOMP WebSocket, springdoc |
 | `yumm-web` | React 19 / TypeScript / Vite / Tailwind 4 | react-router-dom 7 |
-| `yumm-inference` | Python (FastAPI + FAISS 스켈레톤) | **어디에서도 호출되지 않는다.** 삭제 대상 — 아래 참조 |
 | `docs/` | — | 기획의 단일 출처 |
 
 ## 실행
@@ -75,7 +74,7 @@ cd yumm-web && npm run build     # tsc -b + vite build
 - `ddl-auto=update`를 쓴다. 컬럼을 지우거나 제약을 풀지 않으므로, 엔티티에서 필드를 빼면 DB에 남은 `NOT NULL` 컬럼 때문에 INSERT가 깨진다. 그럴 땐 DDL을 손으로 실행한다. 마이그레이션 도구는 외부 공개 전까지 도입하지 않는다.
 - 채팅은 **내장 심플 브로커**를 쓴다. 메시지를 서버 메모리에 들고 있어서 서버를 여러 대로 늘리면 다른 인스턴스에 붙은 사람에게 전달되지 않는다. 스케일아웃 전에 외부 브로커로 바꿔야 한다.
 - 그룹을 별도 테이블 없이 `match_requests.group_id` 컬럼으로만 표현한다. 그룹 자체에 속성(만날 시각·장소)이 생기는 시점이 엔티티로 승격할 시점이다.
-- `yumm-inference`는 호출부가 없다. 조건을 카테고리 선택으로 하고 자유 텍스트·임베딩을 쓰지 않기로 하면서 남은 잔재다. 취향 임베딩이 필요해지면 다시 만든다.
+- `yumm-inference`(FastAPI + FAISS 스켈레톤)는 **삭제했다**(2026-08-29). 조건을 카테고리 선택으로 하고 자유 텍스트·임베딩을 쓰지 않기로 하면서 남은 잔재였다. 취향 임베딩이 필요해지면 다시 만든다 — `product-plan.md` H2 참조.
 
 ## 문서
 
