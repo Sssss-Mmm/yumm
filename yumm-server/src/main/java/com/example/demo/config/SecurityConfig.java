@@ -62,7 +62,10 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(Arrays.asList("http://localhost"));
+        // 개발 서버는 http://localhost:5173에서 뜬다. Vite 프록시가 Origin 헤더를 그대로
+        // 넘기므로 포트 없는 "http://localhost"만 허용하면 로그인부터 403이 된다.
+        // allowCredentials(true)와 함께라면 "*"는 못 쓰고 패턴을 써야 한다.
+        configuration.setAllowedOriginPatterns(Arrays.asList("http://localhost:*"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

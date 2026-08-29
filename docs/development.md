@@ -16,7 +16,9 @@ cd yumm-server && JWT_SECRET=$(openssl rand -base64 32) ./mvnw spring-boot:run
 cd yumm-web && npm install && npm run dev
 ```
 
-웹 개발 서버가 `/api`와 `/ws`를 8080으로 프록시한다. 그래서 CORS 설정이 아예 없다.
+웹 개발 서버가 `/api`와 `/ws`를 8080으로 프록시한다. 다만 프록시는 `Origin` 헤더를 그대로
+넘기므로 서버 입장에서는 여전히 교차 출처 요청이다 — `SecurityConfig`가 `http://localhost:*`를
+허용하는 이유다. 개발 포트를 바꿔도 되지만 호스트가 `localhost`가 아니게 되면 그 목록을 고쳐야 한다.
 
 ### 환경변수
 
