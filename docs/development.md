@@ -43,6 +43,22 @@ export JWT_SECRET=$(openssl rand -base64 32)   # HS256, 256비트
 | `DB_URL` | `jdbc:postgresql://localhost:5432/demo_db` |
 | `DB_USERNAME` / `DB_PASSWORD` | `demo_user` / `demo_pass` |
 | `REDIS_HOST` / `REDIS_PORT` / `REDIS_PASSWORD` | `localhost` / `6379` / (없음) |
+| `SMTP_HOST` | (비어 있음 — 비면 알림 메일을 보내지 않는다) |
+| `SMTP_PORT` | `587` (STARTTLS) |
+| `SMTP_USERNAME` / `SMTP_PASSWORD` | (비어 있음) |
+| `SMTP_FROM` | `no-reply@yumm.local` — 보통 `SMTP_USERNAME`과 같은 주소로 둔다 |
+
+**SMTP는 알림 메일(FR-N-01)용이다.** `SMTP_HOST`가 비어 있으면 `EmailServiceImpl`이 발송을
+건너뛰므로 로컬에서는 설정하지 않아도 매칭이 정상 동작한다. 발송이 실패해도 예외를 삼키고
+로그만 남긴다 — 알림은 부가 기능이라 매칭 편성 트랜잭션을 되돌리면 안 된다.
+
+**자격증명은 OS 환경변수로만 준다. 저장소에는 값을 넣지 않는다.** 키 목록은 `.env.example`에 있고,
+`.env`는 `.gitignore` 대상이다. 앱은 `.env`를 읽지 않으므로 셸에서 export 해야 한다.
+
+```bash
+set -a; source .env; set +a   # .env의 키를 환경변수로 올린다
+cd yumm-server && ./mvnw spring-boot:run
+```
 
 API 문서는 서버를 띄운 뒤 `/swagger-ui.html`.
 

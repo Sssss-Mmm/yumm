@@ -12,17 +12,22 @@ import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.service.EmailService;
 import com.example.demo.service.GroupMatcher;
 import com.example.demo.service.MatchService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -34,9 +39,12 @@ public class MatchServiceImpl implements MatchService {
     // ponytail: 대기 시간을 상수로 고정. 사용자가 고르게 하고 싶어지면 그때 요청 DTO로 올린다.
     private static final int WAIT_MINUTES = 30;
 
+    private static final String MATCHED_SUBJECT = "[yumm] 밥메이트 매칭이 성사됐어요";
+
     private final MatchRequestRepository matchRequestRepository;
     private final UserRepository userRepository;
     private final UserBlockRepository userBlockRepository;
+    private final EmailService emailService;
 
     @Override
     @Transactional
@@ -96,11 +104,69 @@ public class MatchServiceImpl implements MatchService {
 
         List<List<GroupMatcher.Candidate>> groups =
                 GroupMatcher.formGroups(candidates, blockedPairsAmong(waiting), now);
+        List<Notice> notices = new ArrayList<>();
         for (List<GroupMatcher.Candidate> group : groups) {
             String groupId = UUID.randomUUID().toString();
             group.forEach(c -> byId.get(c.id()).assignToGroup(groupId));
+            // 본문은 트랜잭션 안에서 만든다. 커밋 뒤에는 User가 준영속이라 이메일/닉네임을 못 읽는다.
+            notices.addAll(matchedNotices(group, byId, region, mealDate, mealTime));
         }
+        notifyAfterCommit(notices);
         return groups.size();
+    }
+
+    /** 매칭 성사 알림 한 통(FR-N-01). 본문은 그룹당 같고 받는 사람만 다르다. */
+    private record Notice(String to, String body) {}
+
+    private List<Notice> matchedNotices(List<GroupMatcher.Candidate> group, Map<Long, MatchRequest> byId,
+                                        Region region, LocalDate mealDate, MealTime mealTime) {
+        // 다른 구성원의 닉네임·연락처는 넣지 않는다. 메일은 앱보다 유출 경로가 많다(NFR-05).
+        String body = """
+                밥메이트 매칭이 성사됐어요.
+
+                지역: %s
+                날짜: %s
+                끼니: %s
+                인원: %d명
+
+                yumm에서 그룹 채팅으로 만날 곳을 정해 보세요.
+                """.formatted(region.getDescription(), mealDate, mealTime.getDescription(), group.size());
+
+        // 이메일이 없는 행이 하나 있다고 편성 트랜잭션이 NPE로 깨지면 안 된다. 그 사람만 건너뛴다.
+        return group.stream()
+                .map(c -> byId.get(c.id()).getUser())
+                .filter(Objects::nonNull)
+                .map(User::getEmail)
+                .filter(Objects::nonNull)
+                .map(email -> new Notice(email, body))
+                .toList();
+    }
+
+    /**
+     * 편성이 커밋된 뒤에 보낸다. 트랜잭션 안에서 보내면 SMTP 왕복 동안 버킷 잠금을 붙들고,
+     * 커밋이 실패해도 "매칭됐다" 메일이 나간다. 발송 실패는 EmailService가 삼킨다.
+     *
+     * ponytail: 스케줄러 스레드에서 순차 발송한다(통당 타임아웃 5초, 주기 30초).
+     * 그룹 수가 늘어 주기를 넘기기 시작하면 그때 별도 스레드나 큐로 뺀다.
+     */
+    private void notifyAfterCommit(List<Notice> notices) {
+        if (notices.isEmpty()) {
+            return;
+        }
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            send(notices);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                send(notices);
+            }
+        });
+    }
+
+    private void send(List<Notice> notices) {
+        notices.forEach(n -> emailService.send(n.to(), MATCHED_SUBJECT, n.body()));
     }
 
     @Override

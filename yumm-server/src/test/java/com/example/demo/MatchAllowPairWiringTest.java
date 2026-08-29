@@ -11,6 +11,7 @@ import com.example.demo.dto.match.MatchApplyRequest;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.service.EmailService;
 import com.example.demo.service.impl.MatchServiceImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
@@ -56,7 +57,7 @@ class MatchAllowPairWiringTest {
         matchRequestRepository = mock(MatchRequestRepository.class);
         UserRepository userRepository = mock(UserRepository.class);
         userBlockRepository = mock(UserBlockRepository.class);
-        service = new MatchServiceImpl(matchRequestRepository, userRepository, userBlockRepository);
+        service = new MatchServiceImpl(matchRequestRepository, userRepository, userBlockRepository, mock(EmailService.class));
 
         when(userRepository.findByIdForUpdate(USER_ID)).thenReturn(Optional.of(
                 User.builder().id(USER_ID).nickname("서연").gender(Gender.FEMALE).build()));

@@ -7,6 +7,7 @@ import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserBlockRepository;
 import com.example.demo.repository.UserRepository;
+import com.example.demo.service.EmailService;
 import com.example.demo.service.impl.MatchServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,7 +39,8 @@ class MatchLeaveGroupTest {
     @BeforeEach
     void setUp() {
         matchRequestRepository = mock(MatchRequestRepository.class);
-        service = new MatchServiceImpl(matchRequestRepository, mock(UserRepository.class), mock(UserBlockRepository.class));
+        service = new MatchServiceImpl(matchRequestRepository, mock(UserRepository.class), mock(UserBlockRepository.class),
+                mock(EmailService.class));
     }
 
     private static MatchRequest matched(long id, LocalDate mealDate) {
