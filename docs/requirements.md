@@ -158,7 +158,7 @@
 | ID | 요구사항 | 우선 | 상태 | 비고 |
 |---|---|---|---|---|
 | FR-T-01 | 그룹 구성원끼리 실시간 채팅한다 | P0 | ✅ | STOMP `/ws`, 발행 `/pub/chatroom.{groupId}`, 구독 `/sub/chat/room/{groupId}` |
-| FR-T-02 | 그룹 구성원이 아니면 구독·발신이 차단된다 | P0 | ✅ | `StompAuthChannelInterceptor`가 SUBSCRIBE/SEND마다 검사해 새 구독·발신·이력 조회를 막고, **이미 열려 있는 구독은 이탈·해체 시점에 `StompSubscriptionRevoker`가 끊는다**(그 방 구독만 UNSUBSCRIBE, 소켓과 다른 방은 유지). 세션 레지스트리는 따로 두지 않았다 — CONNECT에서 인터셉터가 심은 Principal 덕에 Spring `SimpUserRegistry`가 사용자→세션→구독을 이미 들고 있다. 해체 시에는 남은 인원의 구독도 함께 끊는다. 남은 틈: 커밋 직후 프로세스가 죽으면 그 세션의 수신만 소켓이 끊길 때까지 남는다 |
+| FR-T-02 | 그룹 구성원이 아니면 구독·발신이 차단된다 | P0 | ✅ | `StompAuthChannelInterceptor`가 SUBSCRIBE/SEND마다 검사해 새 구독·발신·이력 조회를 막고, **이미 열려 있는 구독은 이탈·해체 시점에 `StompSubscriptionRevoker`가 끊는다**(그 방 구독만 UNSUBSCRIBE, 소켓과 다른 방은 유지). 세션 레지스트리는 따로 두지 않았다 — CONNECT에서 인터셉터가 심은 Principal 덕에 Spring `SimpUserRegistry`가 사용자→세션→구독을 이미 들고 있다. 해체 시에는 남은 인원의 구독도 함께 끊는다. 남은 틈: 커밋 직후 프로세스가 죽으면 그 세션의 수신만 소켓이 끊길 때까지 남는다 **남은 한계(2026-08-30)**: 프레임 검사는 `withdrawn_at`만 본다. 로그아웃(토큰 블랙리스트)은 프레임에서 재검증되지 않아, 로그아웃한 사용자는 소켓이 끊길 때까지 그룹 채팅을 계속 본다. 탈퇴와 달리 그 사람은 여전히 정당한 구성원이고 자기 기기의 자기 대화라 심각도가 낮다 — 베타 후. 막으려면 CONNECT 때 토큰을 세션 속성에 넣고 프레임마다 재검증해야 한다 |
 | FR-T-03 | 지난 대화를 다시 볼 수 있다 | P0 | ✅ | `chat_messages` 저장 + `GET /api/chat/rooms/{groupId}/messages`. 페이징은 없다(한 방 전체를 시간순으로) |
 | FR-T-04 | 웹에서 채팅 화면을 제공한다 | P0 | ✅ | `yumm-web/src/pages/Chat.tsx`. STOMP는 네이티브 WebSocket 위에 프레임 직접 조립(`src/ws.ts`), 신규 의존성 없음 |
 | FR-T-05 | 만남 다음날 자정에 채팅방을 닫는다 | P1 | ❌ | 무기한 방치 시 사적 연락 통로가 되어 신고 대응이 어려워진다 |
