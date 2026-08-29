@@ -59,7 +59,7 @@ class GroupMatcherTest {
                 candidate(1, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN),
                 candidate(2, Gender.FEMALE, GenderPreference.ANY, FoodCategory.KOREAN));
 
-        assertThat(GroupMatcher.formGroups(waiting, Set.of())).isEmpty();
+        assertThat(GroupMatcher.formGroups(waiting, Set.of(), NOW)).isEmpty();
     }
 
     @Test
@@ -71,7 +71,7 @@ class GroupMatcherTest {
                 candidate(3, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN),
                 candidate(4, Gender.FEMALE, GenderPreference.ANY, FoodCategory.KOREAN));
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of());
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(), NOW);
 
         assertThat(groups).hasSize(1);
         assertThat(groups.get(0)).hasSize(4);
@@ -87,7 +87,7 @@ class GroupMatcherTest {
                 candidate(4, Gender.FEMALE, GenderPreference.ANY, FoodCategory.KOREAN));
 
         // 남2는 동성끼리 묶이지만 2명이라 부족하고, 여2는 남자를 받아도 남자가 거절해서 3명을 못 채운다
-        assertThat(GroupMatcher.formGroups(waiting, Set.of())).isEmpty();
+        assertThat(GroupMatcher.formGroups(waiting, Set.of(), NOW)).isEmpty();
     }
 
     @Test
@@ -99,7 +99,7 @@ class GroupMatcherTest {
                 candidate(3, Gender.FEMALE, GenderPreference.SAME_ONLY, FoodCategory.CAFE),
                 candidate(4, Gender.MALE, GenderPreference.ANY, FoodCategory.CAFE));
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of());
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(), NOW);
 
         assertThat(groups).hasSize(1);
         assertThat(groups.get(0)).extracting(Candidate::id).containsExactlyInAnyOrder(1L, 2L, 3L);
@@ -115,7 +115,7 @@ class GroupMatcherTest {
                 candidate(4, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN),   // 늦게 왔지만 겹침
                 candidate(5, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN));  // 늦게 왔지만 겹침
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of());
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(), NOW);
 
         assertThat(groups).hasSize(1);
         // 한식 3인이 먼저 붙고, 남은 한 자리는 동점이라 먼저 온 2번이 채운다
@@ -134,7 +134,7 @@ class GroupMatcherTest {
                 candidate(6, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN),
                 candidate(7, Gender.MALE, GenderPreference.ANY, FoodCategory.KOREAN));
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of());
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(), NOW);
 
         assertThat(groups).hasSize(2);
         assertThat(groups).extracting(List::size).containsExactly(4, 3);
@@ -147,7 +147,7 @@ class GroupMatcherTest {
     void blockedPairNeverShareGroup() {
         List<Candidate> waiting = List.of(plain(1), plain(2), plain(3), plain(4));
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(1, 2)));
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(1, 2)), NOW);
 
         assertThat(groups).hasSize(1);
         assertThat(groups.get(0)).extracting(Candidate::userId).containsExactlyInAnyOrder(1L, 3L, 4L);
@@ -159,7 +159,7 @@ class GroupMatcherTest {
         List<Candidate> waiting = List.of(plain(1), plain(2), plain(3), plain(4));
 
         // 차단한 쪽이 2, 차단당한 쪽이 1인 경우
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(2, 1)));
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(2, 1)), NOW);
 
         assertThat(groups).hasSize(1);
         assertThat(groups.get(0)).extracting(Candidate::userId).containsExactlyInAnyOrder(1L, 3L, 4L);
@@ -170,7 +170,7 @@ class GroupMatcherTest {
     void blockedUserStillMatchesOthers() {
         List<Candidate> waiting = List.of(plain(1), plain(2), plain(3), plain(4), plain(5), plain(6), plain(7));
 
-        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(1, 2)));
+        List<List<Candidate>> groups = GroupMatcher.formGroups(waiting, Set.of(new BlockedPair(1, 2)), NOW);
 
         assertThat(groups).hasSize(2);
         List<Candidate> groupOfTwo = groups.stream()
