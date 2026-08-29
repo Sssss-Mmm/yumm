@@ -17,8 +17,13 @@ cd yumm-web && npm install && npm run dev
 ```
 
 웹 개발 서버가 `/api`와 `/ws`를 8080으로 프록시한다. 다만 프록시는 `Origin` 헤더를 그대로
-넘기므로 서버 입장에서는 여전히 교차 출처 요청이다 — `SecurityConfig`가 `http://localhost:*`를
-허용하는 이유다. 개발 포트를 바꿔도 되지만 호스트가 `localhost`가 아니게 되면 그 목록을 고쳐야 한다.
+넘기므로 서버 입장에서는 여전히 교차 출처 요청이다 — `SecurityConfig`가 루프백 주소를
+허용 목록에 두는 이유다.
+
+`localhost` · `127.0.0.1` · `[::1]`은 같은 곳을 가리키지만 `Origin` **문자열**은 서로 달라서
+CORS 매칭은 셋을 다른 출처로 본다. 그래서 셋 다 등록해뒀다. **브라우저를 LAN IP로 열면
+(`http://172.x.x.x:5173`) 여전히 403이 난다** — `localhost:5173`으로 접속하거나 그 IP를
+`SecurityConfig.corsConfigurationSource()`의 패턴 목록에 추가한다.
 
 ### 환경변수
 
