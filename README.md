@@ -4,8 +4,12 @@
 
 경쟁 상대는 데이팅 앱이 아니라 **오늘 혼자 먹게 될 그 한 끼**다.
 
-<!-- TODO(포트폴리오): 데모 GIF 또는 스크린샷 3장 — 신청 화면 / 매칭 완료 / 그룹 채팅.
-     `docs/images/`에 두고 여기에 삽입. 배포하면 상단에 링크도. -->
+| 신청 | 대기 | 매칭 완료 | 그룹 채팅 |
+|---|---|---|---|
+| <img src="docs/images/1-apply.png" width="200"> | <img src="docs/images/2-waiting.png" width="200"> | <img src="docs/images/3-matched.png" width="200"> | <img src="docs/images/4-chat.png" width="200"> |
+| 조건을 고르고 신청한다 | 30초 주기로 편성을 시도한다 | 3~4인이 묶이면 그룹이 생긴다 | 채팅방 입장이 곧 참석 의사 |
+
+모바일 웹 전용이다. 네이티브 앱은 범위 밖(`requirements.md`).
 
 ---
 
