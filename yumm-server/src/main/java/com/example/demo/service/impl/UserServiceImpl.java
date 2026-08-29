@@ -292,20 +292,20 @@ public class UserServiceImpl implements UserService {
     /**
      * 탈퇴자의 진행 중인 매칭 신청을 정리한다.
      *
-     * 매칭된 상태면 그룹 이탈(FR-C-02)을 그대로 태운다 — 최소 인원 미달 시 해체와 대기열 복귀(FR-C-03)가
-     * 거기 딸려 있어 탈퇴용 경로를 따로 만들 이유가 없다. 대기 중이면 신청 취소만 하면 된다.
-     * 두 서비스 메서드가 상태에 맞지 않으면 예외를 던지므로 상태를 먼저 보고 갈래를 정한다.
+     * 그룹이 남아 있으면 그룹 이탈(FR-C-02)을 그대로 태운다 — 최소 인원 미달 시 해체와 대기열 복귀(FR-C-03),
+     * 열려 있는 채팅 구독 해제(FR-T-02)가 거기 딸려 있어 탈퇴용 경로를 따로 만들 이유가 없다.
+     *
+     * 최근 1건만 보면 안 된다. 어제 매칭된 뒤(MATCHED) 오늘 재신청하면(WAITING, 지난 끼니라 BR-01이 풀린다)
+     * 최근 행은 WAITING이고 어제 행의 groupId가 남아, 탈퇴 후에도 그 채팅방이 계속 열려 있다.
+     * 그래서 groupId가 붙은 행은 전부 leaveAllGroups로 넘긴다.
      */
     private void clearOngoingMatch(Long userId) {
+        // 대기 중인 최근 신청은 그룹이 없으니 취소만 하면 된다(cancel은 WAITING이 아니면 예외라 상태를 먼저 본다).
         matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(userId)
-                .map(m -> m.getStatus())
-                .ifPresent(status -> {
-                    if (status == MatchStatus.MATCHED) {
-                        matchService.leaveGroup(userId);
-                    } else if (status == MatchStatus.WAITING) {
-                        matchService.cancel(userId);
-                    }
-                });
+                .filter(m -> m.getStatus() == MatchStatus.WAITING)
+                .ifPresent(m -> matchService.cancel(userId));
+
+        matchService.leaveAllGroups(userId);
     }
 
     /**

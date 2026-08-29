@@ -162,7 +162,7 @@ public class UserController {
     @PutMapping("/password")
     @Operation(summary = "사용자 비밀번호 변경", description = "현재 비밀번호와 새로운 비밀번호를 입력받아 비밀번호를 변경합니다. 변경 즉시 기존 토큰은 무효가 되어 재로그인이 필요합니다.")
     public ResponseEntity<ApiResponse<Void>> changePassword(@AuthenticationPrincipal CustomUserDetails userDetails, 
-                                                            @RequestBody ChangePasswordRequest updateRequest,
+                                                            @Valid @RequestBody ChangePasswordRequest updateRequest,
                                                             @RequestHeader(value = "Authorization", required = false) String authHeader) {
         userService.changePassword(userDetails.getId(), updateRequest, bearerToken(authHeader));
 

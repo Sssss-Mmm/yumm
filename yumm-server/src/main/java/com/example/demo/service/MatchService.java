@@ -31,6 +31,12 @@ public interface MatchService {
     void leaveGroup(Long userId);
 
     /**
+     * 이 사용자가 아직 속해 있는 그룹에서 전부 뺀다(탈퇴 정리, FR-A-08).
+     * 그룹마다 {@link #leaveGroup(Long)}과 같은 처리(해체·대기열 복귀·구독 해제·알림)를 태운다.
+     */
+    void leaveAllGroups(Long userId);
+
+    /**
      * 오늘 식사 예정인 성사된 신청에 당일 아침 리마인드를 보낸다(FR-N-04). 보낸 통수를 돌려준다.
      * 한 신청당 하루 한 통이며, 스케줄러가 자주 호출해도 두 번 나가지 않는다.
      */

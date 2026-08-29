@@ -72,6 +72,14 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Long
     /** 사용자의 가장 최근 매칭 신청 1건 */
     Optional<MatchRequest> findFirstByUser_IdOrderByCreatedAtDesc(Long userId);
 
+    /**
+     * 이 사용자가 아직 속해 있는 그룹 행 전부.
+     *
+     * 최근 1건만 보면 지난 끼니의 MATCHED 행이 남는다 — 재신청으로 더 최근 행이 생기면
+     * 그 오래된 groupId가 그대로 살아 채팅방 접근 판정(existsByGroupIdAndUser_Id)을 통과한다.
+     */
+    List<MatchRequest> findByUser_IdAndGroupIdIsNotNull(Long userId);
+
     boolean existsByUser_IdAndStatus(Long userId, MatchStatus status);
 
     /** 같은 groupId를 가진 행들이 곧 한 그룹 */

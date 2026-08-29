@@ -11,13 +11,20 @@ import com.example.demo.service.EmailService;
 import com.example.demo.service.JwtRedisService;
 import com.example.demo.service.MatchService;
 import com.example.demo.service.impl.UserServiceImpl;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -32,6 +39,9 @@ class CredentialChangeTokenTest {
 
     private static final Long USER_ID = 7L;
     private static final String ACCESS_TOKEN = "header.payload.signature";
+
+    private static final Validator VALIDATOR = Validation.buildDefaultValidatorFactory().getValidator();
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private UserRepository userRepository;
     private JwtRedisService jwtRedisService;
@@ -69,6 +79,47 @@ class CredentialChangeTokenTest {
         userService.changePassword(USER_ID, request, ACCESS_TOKEN);
 
         verify(jwtRedisService).invalidateAllUserTokens(USER_ID, ACCESS_TOKEN);
+    }
+
+    /**
+     * 비밀번호 변경도 가입과 같은 정책이어야 한다(FR-A-09).
+     * 제약이 없으면 빈 문자열도 BCrypt가 그대로 해시해 저장되고, 그 계정은 빈 비밀번호로 로그인된다.
+     * 컨트롤러가 받는 경로와 같게 JSON을 역직렬화한 뒤 검증한다.
+     */
+    @Test
+    @DisplayName("짧거나 비어 있거나 숫자가 없는 새 비밀번호는 400으로 거부된다")
+    void weakNewPasswordIsRejected() throws Exception {
+        assertThat(violatedFields("""
+                {"oldPassword":"yumm1234","newPassword":"yumm5678"}
+                """)).isEmpty();
+
+        // 빈 문자열, 8자 미만, 숫자 없음, 영문 없음 — 가입과 같은 규칙으로 전부 막힌다
+        assertThat(violatedFields("""
+                {"oldPassword":"yumm1234","newPassword":""}
+                """)).contains("newPassword");
+        assertThat(violatedFields("""
+                {"oldPassword":"yumm1234","newPassword":"yum123"}
+                """)).contains("newPassword");
+        assertThat(violatedFields("""
+                {"oldPassword":"yumm1234","newPassword":"yummyummy"}
+                """)).contains("newPassword");
+        assertThat(violatedFields("""
+                {"oldPassword":"yumm1234","newPassword":"12345678"}
+                """)).contains("newPassword");
+
+        // 현재 비밀번호 누락도 400이다. 서비스까지 가면 matches(null, ...)가 500이 된다.
+        assertThat(violatedFields("""
+                {"newPassword":"yumm5678"}
+                """)).contains("oldPassword");
+    }
+
+    /** 위반한 필드 이름들. 비어 있으면 400 없이 통과한다는 뜻이다. */
+    private static Set<String> violatedFields(String json) throws Exception {
+        ChangePasswordRequest request = MAPPER.readValue(json, ChangePasswordRequest.class);
+        return VALIDATOR.validate(request).stream()
+                .map(ConstraintViolation::getPropertyPath)
+                .map(Object::toString)
+                .collect(Collectors.toSet());
     }
 
     @Test

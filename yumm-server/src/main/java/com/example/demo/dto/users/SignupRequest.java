@@ -20,10 +20,9 @@ public class SignupRequest {
     @Size(max = 100, message = "이메일은 100자 이하여야 합니다.")
     private String email;
 
-    // FR-A-09: 8자 이상, 영문·숫자 조합. 상한 64는 BCrypt가 72바이트 뒤를 잘라 버리기 때문에 둔다.
+    // FR-A-09: 8자 이상, 영문·숫자 조합. 비밀번호 변경(ChangePasswordRequest)과 같은 정책을 공유한다.
     @NotBlank(message = "비밀번호는 필수 입력 항목입니다.")
-    @Pattern(regexp = "^(?=.*[A-Za-z])(?=.*\\d)\\S{8,64}$",
-             message = "비밀번호는 8자 이상이며 영문과 숫자를 모두 포함해야 합니다.")
+    @Pattern(regexp = PasswordPolicy.PATTERN, message = PasswordPolicy.MESSAGE)
     private String password;
 
     @NotBlank(message = "닉네임은 필수 입력 항목입니다.")

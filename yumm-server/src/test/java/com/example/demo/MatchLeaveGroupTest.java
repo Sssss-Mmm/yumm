@@ -191,4 +191,33 @@ class MatchLeaveGroupTest {
                 .isInstanceOf(CustomException.class)
                 .hasFieldOrPropertyWithValue("errorCode", ErrorCode.MATCH_REQUEST_NOT_FOUND);
     }
+
+    /**
+     * 탈퇴 정리(FR-A-08)는 최근 1건이 아니라 groupId가 남은 행 전부를 봐야 한다.
+     * 어제 매칭된 뒤 오늘 재신청하면 최근 행은 WAITING이라, 최근 1건만 보는 정리는
+     * 어제 행의 groupId를 그대로 남기고 그 채팅방이 탈퇴 후에도 열려 있다.
+     */
+    @Test
+    @DisplayName("최근 신청이 대기 중이어도 오래된 MATCHED 행의 groupId까지 비우고 구독을 끊는다")
+    void leaveAllGroupsClearsOlderMatchedRow() {
+        List<MatchRequest> members = group(3, LocalDate.now().minusDays(1));
+        MatchRequest stale = members.get(0);
+
+        // 오늘 재신청한 최근 행 — 그룹이 없어 이 경로에서는 볼 것이 없다
+        MatchRequest reapplied = MatchRequest.builder()
+                .id(11L)
+                .status(MatchStatus.WAITING)
+                .createdAt(LocalDateTime.now())
+                .expiresAt(LocalDateTime.now().plusMinutes(30))
+                .build();
+        when(matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(USER_ID)).thenReturn(Optional.of(reapplied));
+        when(matchRequestRepository.findByUser_IdAndGroupIdIsNotNull(USER_ID)).thenReturn(List.of(stale));
+
+        service.leaveAllGroups(USER_ID);
+
+        // groupId가 남으면 existsByGroupIdAndUser_Id가 계속 true라 채팅방을 그대로 읽고 쓴다
+        assertThat(stale.getGroupId()).isNull();
+        assertThat(stale.getStatus()).isEqualTo(MatchStatus.CANCELLED);
+        verify(revoker).revoke(eq(GROUP_ID), org.mockito.ArgumentMatchers.anyList());
+    }
 }

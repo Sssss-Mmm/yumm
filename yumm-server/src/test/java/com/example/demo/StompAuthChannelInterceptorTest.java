@@ -1,6 +1,7 @@
 package com.example.demo;
 
 import com.example.demo.repository.MatchRequestRepository;
+import com.example.demo.repository.UserRepository;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.security.StompAuthChannelInterceptor;
 import com.example.demo.service.JwtRedisService;
@@ -26,21 +27,29 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * 채팅방 참여 자격 검사. 남의 방 주소를 알아도 들어갈 수 없어야 한다.
+ * 채팅방 참여 자격 검사. 남의 방 주소를 알아도 들어갈 수 없어야 하고,
+ * 탈퇴한 계정은 이미 열어둔 소켓으로도 읽고 쓸 수 없어야 한다(FR-A-08).
  */
 class StompAuthChannelInterceptorTest {
 
     private static final String ROOM_ID = "8f0b1c2d-0000-0000-0000-000000000001";
+    private static final String TOKEN = "header.payload.signature";
 
     private MatchRequestRepository matchRequestRepository;
+    private UserRepository userRepository;
     private StompAuthChannelInterceptor interceptor;
     private MessageChannel channel;
 
     @BeforeEach
     void setUp() {
         matchRequestRepository = mock(MatchRequestRepository.class);
+        userRepository = mock(UserRepository.class);
+        JwtUtils jwtUtils = mock(JwtUtils.class);
+        when(jwtUtils.getUserIdFromToken(TOKEN)).thenReturn(1L);
+        when(jwtUtils.getEmailFromToken(TOKEN)).thenReturn("u1@test.com");
+        when(jwtUtils.getRolesFromToken(TOKEN)).thenReturn(List.of("ROLE_USER"));
         interceptor = new StompAuthChannelInterceptor(
-                mock(JwtUtils.class), mock(JwtRedisService.class), matchRequestRepository);
+                jwtUtils, mock(JwtRedisService.class), matchRequestRepository, userRepository);
         channel = mock(MessageChannel.class);
 
         // 방에는 1번, 2번 사용자만 있다
@@ -105,6 +114,44 @@ class StompAuthChannelInterceptorTest {
         assertThatThrownBy(() -> interceptor.preSend(message, channel))
                 .isInstanceOf(MessageDeliveryException.class)
                 .hasMessageContaining("인증 토큰이 없습니다");
+    }
+
+    @Test
+    @DisplayName("탈퇴한 계정은 CONNECT 단계에서 연결이 거부된다")
+    void withdrawnAccountCannotConnect() {
+        when(userRepository.existsByIdAndWithdrawnAtIsNotNull(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> interceptor.preSend(connectFrame(), channel))
+                .isInstanceOf(MessageDeliveryException.class)
+                .hasMessageContaining("탈퇴한 계정");
+    }
+
+    @Test
+    @DisplayName("연결한 뒤 탈퇴하면 이미 열려 있는 소켓으로도 구독/발신할 수 없다")
+    void withdrawnAccountCannotUseOpenSocket() {
+        // 연결 시점에는 멀쩡한 계정이었다
+        assertThat(interceptor.preSend(connectFrame(), channel)).isNotNull();
+
+        // 그 뒤 탈퇴. 소켓은 살아 있고 방 구성원 판정(existsByGroupIdAndUser_Id)도 아직 true다.
+        when(userRepository.existsByIdAndWithdrawnAtIsNotNull(1L)).thenReturn(true);
+
+        assertThatThrownBy(() -> interceptor.preSend(
+                frame(StompCommand.SUBSCRIBE, "/sub/chat/room/" + ROOM_ID, 1L), channel))
+                .isInstanceOf(MessageDeliveryException.class)
+                .hasMessageContaining("탈퇴한 계정");
+
+        assertThatThrownBy(() -> interceptor.preSend(
+                frame(StompCommand.SEND, "/pub/chatroom." + ROOM_ID, 1L), channel))
+                .isInstanceOf(MessageDeliveryException.class)
+                .hasMessageContaining("탈퇴한 계정");
+    }
+
+    /** 토큰이 실린 CONNECT 프레임. 서명 검증은 목이 통과시키므로 여기서 보는 건 탈퇴 검사뿐이다. */
+    private Message<byte[]> connectFrame() {
+        StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.CONNECT);
+        accessor.setNativeHeader("Authorization", "Bearer " + TOKEN);
+        accessor.setLeaveMutable(true);
+        return MessageBuilder.createMessage(new byte[0], accessor.getMessageHeaders());
     }
 
     @Test

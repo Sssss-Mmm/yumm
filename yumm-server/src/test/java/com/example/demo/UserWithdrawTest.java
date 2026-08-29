@@ -140,8 +140,8 @@ class UserWithdrawTest {
 
         userService.withdraw(USER_ID, ACCESS_TOKEN);
 
-        // 그룹 해체(FR-C-03)가 leaveGroup에 딸려 있으므로 탈퇴 전용 경로를 만들지 않는다
-        verify(matchService).leaveGroup(USER_ID);
+        // 그룹 해체(FR-C-03)와 구독 해제(FR-T-02)가 이탈 경로에 딸려 있으므로 탈퇴 전용 경로를 만들지 않는다
+        verify(matchService).leaveAllGroups(USER_ID);
         verify(matchService, never()).cancel(USER_ID);
 
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user(USER_ID, "me2@yumm.local")));
@@ -151,6 +151,23 @@ class UserWithdrawTest {
         userService.withdraw(USER_ID, ACCESS_TOKEN);
 
         verify(matchService).cancel(USER_ID);
+    }
+
+    /**
+     * 어제 매칭된 뒤(MATCHED) 오늘 재신청한(WAITING) 계정. 최근 1건만 보면 어제 행의 groupId가 살아남아
+     * 탈퇴 후에도 그 채팅방을 계속 읽고 쓸 수 있다. 최근 행의 상태와 무관하게 그룹 정리가 돌아야 한다.
+     */
+    @Test
+    @DisplayName("최근 신청이 대기 중이어도 오래된 MATCHED 행의 그룹까지 정리한다")
+    void withdrawClearsOlderMatchedGroup() {
+        when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user(USER_ID, "me@yumm.local")));
+        when(matchRequestRepository.findFirstByUser_IdOrderByCreatedAtDesc(USER_ID))
+                .thenReturn(Optional.of(matchRequest(MatchStatus.WAITING)));
+
+        userService.withdraw(USER_ID, ACCESS_TOKEN);
+
+        verify(matchService).cancel(USER_ID);
+        verify(matchService).leaveAllGroups(USER_ID);
     }
 
     private MatchRequest matchRequest(MatchStatus status) {

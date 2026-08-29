@@ -221,6 +221,23 @@ public class MatchServiceImpl implements MatchService {
                 .filter(m -> m.getStatus() == MatchStatus.MATCHED)
                 .orElseThrow(() -> new CustomException(ErrorCode.MATCH_REQUEST_NOT_FOUND));
 
+        leave(request);
+    }
+
+    /**
+     * 탈퇴 정리용(FR-A-08). groupId가 남은 행을 전부 같은 이탈 처리에 태운다.
+     *
+     * 최근 1건만 보면 안 된다: 어제 매칭된 뒤(MATCHED) 오늘 재신청하면(WAITING) 최근 행은 WAITING이라
+     * 어제 행의 groupId가 그대로 살아 탈퇴 후에도 그 채팅방을 읽고 쓸 수 있다.
+     */
+    @Override
+    @Transactional
+    public void leaveAllGroups(Long userId) {
+        matchRequestRepository.findByUser_IdAndGroupIdIsNotNull(userId).forEach(this::leave);
+    }
+
+    /** 신청 행 하나를 그 그룹에서 뺀다. 사용자 단위 진입점(leaveGroup/leaveAllGroups)이 공유한다. */
+    private void leave(MatchRequest request) {
         // leaveGroup()이 groupId를 지우므로 채팅방 주소는 먼저 챙겨둔다.
         String groupId = request.getGroupId();
 
