@@ -1,5 +1,7 @@
 # yumm
 
+[![CI](https://github.com/Sssss-Mmm/yumm/actions/workflows/ci.yml/badge.svg)](https://github.com/Sssss-Mmm/yumm/actions/workflows/ci.yml)
+
 **혼밥 대신 밥메이트.** 조건이 맞는 3~4인을 시스템이 자동으로 묶어 같이 밥 먹게 하는 매칭 서비스.
 
 경쟁 상대는 데이팅 앱이 아니라 **오늘 혼자 먹게 될 그 한 끼**다.
@@ -66,7 +68,7 @@
 - **채팅**은 Spring 내장 심플 브로커. 메시지를 서버 메모리에 들고 있어서 다중화하면 깨진다 — 스케일아웃 시 외부 브로커로 교체해야 하는 지점이고, 알면서 남겨둔 부채다.
 - **DB 마이그레이션 도구를 쓰지 않는다.** `ddl-auto=update` + 필요 시 수동 DDL. 외부 공개 전까지는 도구 도입 비용이 이득보다 크다고 판단했고, 대신 [배포 전 실행할 SQL](docs/development.md#기존-db에-배포하기-전-수동-마이그레이션)을 문서로 고정해뒀다.
 
-규모는 서버 약 4,100줄 / 웹 약 1,100줄, 엔드포인트 19개, 테스트 58개.
+규모는 서버 약 4,300줄 / 웹 약 1,800줄, REST 엔드포인트 21개, 테스트 120개.
 
 ## 테스트
 
@@ -85,12 +87,21 @@
 | `AdminReportHandleTest` | 신고 목록 필터, 재처리 멱등, 없는 신고 |
 | `StompAuthChannelInterceptorTest` | WebSocket 핸드셰이크 인증 |
 | `ChatServiceTest` | 메시지 저장·조회 |
+| `StompSubscriptionRevokerTest` | 이탈·해체 시 해당 방 구독만 끊고 나머지는 남기는지 |
+| `MatchNotificationTest` | 성사·해체·리마인드 발송, 커밋 후 발송, 메일 실패가 편성을 롤백하지 않는지 |
+| `EmailVerificationTest` | 6자리 코드 발급·만료·오입력, 미인증 신청 차단, 이메일 변경 시 인증 리셋 |
+| `AbuseGuardTest` | 코드 오입력 임계 초과 시 폐기, 재발송 쿨다운, 로그인 잠금, 운영 Swagger 차단 |
+| `CredentialChangeTokenTest` | 비밀번호·이메일 변경 시 기존 토큰 블랙리스트 |
+| `SignupValidationTest` | 필수값·이메일 형식·비밀번호 정책, 예외 메시지 누출 방지 |
+| `UserWithdrawTest` | 탈퇴 익명화, 신고 이력 보존, 진행 중 매칭 정리 |
+| `WithdrawnAccountAccessTest` / `WithdrawnAccountChatAccessTest` | 탈퇴 계정 토큰·WebSocket 잔여 경로 차단 |
+| `MatchRequestRepositoryQueryTest` | `group_id` 조회 쿼리 |
 
 ```bash
 cd yumm-server && ./mvnw test
 ```
 
-DB 없이 전부 통과한다. `DemoApplicationTests.contextLoads`만 PostgreSQL과 `JWT_SECRET`이 필요해서 둘 다 설정됐을 때만 켜진다 — [실행법](docs/development.md#빌드와-테스트).
+120개 중 119개가 DB 없이 통과한다. `DemoApplicationTests.contextLoads`만 PostgreSQL과 `JWT_SECRET`이 필요해서 둘 다 설정됐을 때만 켜진다 — [실행법](docs/development.md#빌드와-테스트).
 
 ## 현재 상태
 
