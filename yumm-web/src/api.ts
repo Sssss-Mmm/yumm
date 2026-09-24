@@ -46,8 +46,10 @@ export async function api<T>(path: string, method = "GET", body?: unknown): Prom
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  // 토큰 만료/미인증은 어디서 터지든 로그인으로 보낸다.
-  if (res.status === 401) {
+  // 토큰 만료/미인증은 어디서 터지든 로그인으로 보낸다. 단 로그인 요청 자체의 401은
+  // 세션 문제가 아니라 비밀번호가 틀린 것이다 — 여기서 가로채면 로그인 화면이 통째로
+  // 새로고침되면서 "비밀번호가 올바르지 않습니다"가 사라지고, 화면은 아무 일도 안 한 것처럼 보인다.
+  if (res.status === 401 && path !== "/auth/login") {
     setTokens(null);
     location.href = "/login";
     throw new Error("로그인이 필요합니다.");
