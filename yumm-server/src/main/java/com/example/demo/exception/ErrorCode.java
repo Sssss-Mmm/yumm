@@ -45,6 +45,8 @@ public enum ErrorCode {
 
     WITHDRAWN_ACCOUNT(HttpStatus.FORBIDDEN, "탈퇴한 계정입니다. 다시 이용하시려면 새로 가입해 주세요."),
 
+    ACCOUNT_SUSPENDED(HttpStatus.FORBIDDEN, "이용이 정지된 계정입니다. 문의가 필요하면 운영팀에 연락해 주세요."),
+
     // 이름이 그대로 응답 JSON의 error 값이 된다(GlobalExceptionHandler). 웹이 이 문자열로 인증 창을 띄우므로 바꾸지 않는다.
     EMAIL_NOT_VERIFIED(HttpStatus.FORBIDDEN, "매칭 신청 전에 이메일 인증이 필요합니다."),
 

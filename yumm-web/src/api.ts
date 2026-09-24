@@ -97,6 +97,7 @@ export type AdminReport = {
   reporterNickname: string;
   reportedId: number;
   reportedNickname: string;
+  reportedSuspended: boolean;
   reason: string;
   reasonLabel: string;
   detail: string | null;
@@ -110,6 +111,33 @@ export const getReports = (includeHandled = false) =>
 
 export const handleReport = (id: number) =>
   api<AdminReport>(`/admin/reports/${id}/handle`, "POST");
+
+/** 계정 정지/해제(FR-D-02). 정지하면 서버가 진행 중인 매칭도 정리한다. */
+export const setSuspended = (userId: number, suspended: boolean) =>
+  api<void>(`/admin/users/${userId}/suspend`, suspended ? "POST" : "DELETE");
+
+// 서버 Region / MealTime enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
+// ponytail: 목록은 프론트 상수. 지역이 자주 바뀌면 그때 서버에서 내려받는다.
+export const REGIONS = {
+  GANGNAM: "강남", HONGDAE: "홍대", SINCHON: "신촌", KONDAE: "건대",
+  JONGNO: "종로", YEOUIDO: "여의도", PANGYO: "판교",
+};
+export const MEAL_TIMES = { LUNCH: "점심", DINNER: "저녁" };
+
+// 로컬 시간대 기준 YYYY-MM-DD. toISOString()은 UTC라 KST 00:00~09:00 사이에 어제가 나온다.
+// 예: KST 2026-08-29 08:00 → "2026-08-29" (toISOString()은 "2026-08-28")
+export const localDate = (d: Date = new Date()) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** 한 버킷의 현재 대기 인원. 대기자가 없는 버킷은 응답에 없다 → 0으로 읽는다. */
+export type WaitingCount = { region: string; mealDate: string; mealTime: string; count: number };
+
+/** 지역별 대기 인원(FR-A-10, FR-M-10). 로그인 없이 호출된다. */
+export const getWaitingCounts = () => api<WaitingCount[]>("/match/waiting-counts");
+
+/** 응답 목록에서 한 버킷의 인원을 찾는다. */
+export const countOf = (list: WaitingCount[], region: string, mealDate: string, mealTime: string) =>
+  list.find((c) => c.region === region && c.mealDate === mealDate && c.mealTime === mealTime)?.count ?? 0;
 
 /** 회원가입. agreedToTerms는 필수 동의라 서버가 false면 400을 준다. */
 export type SignupRequest = {

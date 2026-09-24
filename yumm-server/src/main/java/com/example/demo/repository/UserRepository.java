@@ -25,6 +25,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     boolean existsByIdAndWithdrawnAtIsNotNull(Long id);
 
+    /** 정지된 계정인지만 확인한다(FR-D-02). 탈퇴 확인과 같은 이유로 필터가 요청마다 부른다. */
+    boolean existsByIdAndSuspendedAtIsNotNull(Long id);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM User u WHERE u.id = :id")
     Optional<User> findByIdForUpdate(@Param("id") Long id);

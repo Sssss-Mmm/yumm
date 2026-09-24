@@ -135,6 +135,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 throw new JwtException("Withdrawn account");
             }
 
+            // 정지 계정(FR-D-02). 이유는 탈퇴와 같다 — 정지 전에 발급된 토큰이 만료까지 살아 있다.
+            if (userRepository.existsByIdAndSuspendedAtIsNotNull(jwtUtil.getUserIdFromToken(token))) {
+                throw new JwtException("Suspended account");
+            }
+
             /**
              * SecurityContext에 인증 객체 등록 (위의 토큰 유효성 검사 통과 시)
              * 
@@ -206,6 +211,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             } else if ("Withdrawn account".equals(ex.getMessage())) {
                 // 401로 내린다. 클라이언트는 재발급을 시도하지만 탈퇴 시 Refresh Token을 지웠으므로 그것도 실패해 로그아웃된다.
                 errorMessage = "{\"error\": \"WITHDRAWN_ACCOUNT\", \"message\": \"탈퇴한 계정입니다.\"}";
+            } else if ("Suspended account".equals(ex.getMessage())) {
+                errorMessage = "{\"error\": \"ACCOUNT_SUSPENDED\", \"message\": \"이용이 정지된 계정입니다.\"}";
             } else {
                 errorMessage = "{\"message\": \"유효하지 않은 JWT 토큰입니다.\"}";
             }

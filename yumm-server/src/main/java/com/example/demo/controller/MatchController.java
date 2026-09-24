@@ -3,6 +3,7 @@ package com.example.demo.controller;
 import com.example.demo.common.ApiResponse;
 import com.example.demo.dto.match.MatchApplyRequest;
 import com.example.demo.dto.match.MatchStatusResponse;
+import com.example.demo.dto.match.WaitingCountResponse;
 import com.example.demo.security.CustomUserDetails;
 import com.example.demo.service.MatchService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -11,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/match")
@@ -80,5 +83,16 @@ public class MatchController {
         matchService.leaveGroup(userDetails.getId());
 
         return ApiResponse.ok("그룹에서 나갔습니다.");
+    }
+
+    /**
+     * 버킷별 현재 대기 인원 조회 API. 로그인 없이 호출할 수 있습니다(FR-A-10).
+     * 대기자가 있는 버킷만 내려가며, 인원 수 외의 정보는 담지 않습니다.
+     */
+    @GetMapping("/waiting-counts")
+    @Operation(summary = "지역별 대기 인원 조회",
+            description = "지역·날짜·시간대별 현재 대기 인원을 줍니다. 비로그인 둘러보기(FR-A-10)와 대기 화면(FR-M-10)이 함께 씁니다.")
+    public ResponseEntity<ApiResponse<List<WaitingCountResponse>>> getWaitingCounts() {
+        return ApiResponse.ok("대기 인원 조회 성공", matchService.getWaitingCounts());
     }
 }

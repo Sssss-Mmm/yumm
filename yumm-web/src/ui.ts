@@ -30,3 +30,6 @@ export const label = "text-sm font-medium text-stone-600";
 export const h1 = "text-2xl font-bold tracking-tight text-stone-900";
 
 export const muted = "text-sm text-stone-500";
+
+/** 홈만 넓게 쓴다(데스크톱 2단 히어로). 나머지는 폼·목록이라 좁은 폭이 읽기 편하다. */
+export const pageWidth = (pathname: string) => (pathname === "/" ? "max-w-5xl" : "max-w-md");

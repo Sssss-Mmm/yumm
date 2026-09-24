@@ -4,8 +4,10 @@ import com.example.demo.domain.MealTime;
 import com.example.demo.domain.Region;
 import com.example.demo.dto.match.MatchApplyRequest;
 import com.example.demo.dto.match.MatchStatusResponse;
+import com.example.demo.dto.match.WaitingCountResponse;
 
 import java.time.LocalDate;
+import java.util.List;
 
 public interface MatchService {
 
@@ -41,4 +43,7 @@ public interface MatchService {
      * 한 신청당 하루 한 통이며, 스케줄러가 자주 호출해도 두 번 나가지 않는다.
      */
     int remindTodayMeals();
+
+    /** 버킷별 현재 대기 인원. 대기자가 있는 버킷만 준다(FR-A-10, FR-M-10). */
+    List<WaitingCountResponse> getWaitingCounts();
 }

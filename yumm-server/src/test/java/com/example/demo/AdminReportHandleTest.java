@@ -6,7 +6,11 @@ import com.example.demo.domain.ReportReason;
 import com.example.demo.domain.User;
 import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
+import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.ReportRepository;
+import com.example.demo.repository.UserRepository;
+import com.example.demo.service.JwtRedisService;
+import com.example.demo.service.MatchService;
 import com.example.demo.service.impl.AdminServiceImpl;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -36,7 +40,8 @@ class AdminReportHandleTest {
     @BeforeEach
     void setUp() {
         reportRepository = mock(ReportRepository.class);
-        service = new AdminServiceImpl(reportRepository);
+        service = new AdminServiceImpl(reportRepository, mock(UserRepository.class), mock(MatchRequestRepository.class),
+                mock(MatchService.class), mock(JwtRedisService.class));
     }
 
     private static User user(Long id, String nickname) {

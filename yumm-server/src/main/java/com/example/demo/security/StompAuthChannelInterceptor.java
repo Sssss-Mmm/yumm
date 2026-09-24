@@ -77,7 +77,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                     jwtUtils.getEmailFromToken(token),
                     jwtUtils.getRolesFromToken(token));
 
-            rejectIfWithdrawn(userDetails.getId());
+            rejectIfInactive(userDetails.getId());
 
             accessor.setUser(new UsernamePasswordAuthenticationToken(
                     userDetails, null, userDetails.getAuthorities()));
@@ -100,7 +100,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         Long userId = currentUserId(accessor);
 
         // 연결 이후에 탈퇴했을 수 있다. 프레임마다 다시 본다.
-        rejectIfWithdrawn(userId);
+        rejectIfInactive(userId);
 
         if (!matchRequestRepository.existsByGroupIdAndUser_Id(roomId, userId)) {
             throw new MessageDeliveryException("이 채팅방에 참여할 권한이 없습니다.");
@@ -116,9 +116,13 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
      * 한계: 여기서 보는 건 탈퇴 여부뿐이다. 프레임에는 토큰이 없어 만료·블랙리스트는 다시 못 본다.
      * 그것까지 막으려면 CONNECT 때 토큰을 세션 속성에 넣고 프레임마다 재검증한다.
      */
-    private void rejectIfWithdrawn(Long userId) {
+    private void rejectIfInactive(Long userId) {
         if (userRepository.existsByIdAndWithdrawnAtIsNotNull(userId)) {
             throw new MessageDeliveryException("탈퇴한 계정입니다.");
+        }
+        // 정지(FR-D-02)도 같은 자리에서 본다. 정지된 사람이 열어둔 채팅방에서 계속 말하면 정지가 무의미하다.
+        if (userRepository.existsByIdAndSuspendedAtIsNotNull(userId)) {
+            throw new MessageDeliveryException("이용이 정지된 계정입니다.");
         }
     }
 

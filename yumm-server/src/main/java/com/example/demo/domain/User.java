@@ -55,6 +55,9 @@ public class User {
     // 이메일 인증 시각(FR-A-03). NULL = 미인증. 가입은 미인증으로도 되고, 막히는 건 매칭 신청뿐이다.
     private LocalDateTime emailVerifiedAt;
 
+    // 관리자 정지 시각(FR-D-02). NULL = 정상. 탈퇴와 달리 개인정보는 그대로 두고 해제하면 원래대로 돌아온다.
+    private LocalDateTime suspendedAt;
+
 
 
     public void updateProfile(String nickname, String profileImageUrl) {
@@ -88,6 +91,19 @@ public class User {
         // 인증은 "이 주소를 실제로 받아본다"는 증명인데 주소를 @yumm.invalid로 덮었으므로 함께 무효화한다.
         // 안 지우면 탈퇴자가 살아 있는 토큰으로 매칭 신청의 이메일 인증 게이트를 그대로 통과한다(FR-A-03/FR-A-08).
         this.emailVerifiedAt = null;
+    }
+
+    /** 관리자 정지(FR-D-02). 이미 정지된 계정은 최초 정지 시각을 유지한다. */
+    public void suspend(LocalDateTime at) {
+        if (suspendedAt == null) this.suspendedAt = at;
+    }
+
+    public void unsuspend() {
+        this.suspendedAt = null;
+    }
+
+    public boolean isSuspended() {
+        return suspendedAt != null;
     }
 
     public boolean isWithdrawn() {

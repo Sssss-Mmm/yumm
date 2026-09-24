@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * 관리자 전용 API(FR-D-01).
+ * 관리자 전용 API. 신고 처리(FR-D-01)와 계정 정지(FR-D-02).
  *
  * <p>접근 제어는 {@code SecurityConfig}가 {@code /api/admin/**}에 ROLE_ADMIN을 요구하는 것으로
  * 처리한다. 컨트롤러에서 권한을 다시 확인하지 않는다.
@@ -46,5 +46,31 @@ public class AdminController {
             description = "이미 처리된 신고를 다시 호출해도 최초 처리 시각은 바뀌지 않는다.")
     public ResponseEntity<ApiResponse<AdminReportResponse>> handleReport(@PathVariable Long reportId) {
         return ApiResponse.ok("신고를 처리했습니다.", adminService.handleReport(reportId));
+    }
+
+    /**
+     * 계정을 정지한다(FR-D-02). 로그인·기존 토큰·채팅이 즉시 막히고 진행 중인 매칭은 정리된다.
+     *
+     * @param userId 정지할 사용자 ID
+     */
+    @PostMapping("/users/{userId}/suspend")
+    @Operation(summary = "계정 정지",
+            description = "로그인과 이미 발급된 토큰을 모두 막는다. 대기 중인 신청은 취소하고 속한 그룹에서는 이탈 처리한다. "
+                    + "이미 정지된 계정에 다시 호출해도 최초 정지 시각은 바뀌지 않는다.")
+    public ResponseEntity<ApiResponse<Void>> suspendUser(@PathVariable Long userId) {
+        adminService.suspendUser(userId);
+        return ApiResponse.ok("계정을 정지했습니다.");
+    }
+
+    /**
+     * 계정 정지를 해제한다(FR-D-02).
+     *
+     * @param userId 해제할 사용자 ID
+     */
+    @DeleteMapping("/users/{userId}/suspend")
+    @Operation(summary = "계정 정지 해제", description = "정지로 취소된 신청·그룹은 되살리지 않는다.")
+    public ResponseEntity<ApiResponse<Void>> unsuspendUser(@PathVariable Long userId) {
+        adminService.unsuspendUser(userId);
+        return ApiResponse.ok("계정 정지를 해제했습니다.");
     }
 }

@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  ApiError, api, blockUser, confirmEmailCode, getMatchStatus, leaveGroup, myUserId, reportUser, sendEmailCode,
-  type MatchMember as Member, type MatchStatus,
+  ApiError, MEAL_TIMES, REGIONS, api, blockUser, countOf, getWaitingCounts, localDate, confirmEmailCode, getMatchStatus, leaveGroup, myUserId, reportUser, sendEmailCode,
+  type MatchMember as Member, type MatchStatus, type WaitingCount,
 } from "../api";
+import Seats from "../components/Seats";
 import { btn, btnGhost, btnSm, card, h1, input, label, muted } from "../ui";
 import { useCountdown } from "../useCountdown";
 
@@ -11,13 +12,6 @@ import { useCountdown } from "../useCountdown";
 // 서버가 429로 남은 초를 주면 그 값이 이 값을 덮어쓴다.
 const RESEND_COOLDOWN_SECONDS = 60;
 
-// 서버 Region enum과 1:1. 지역은 버킷 키라 자유 입력이면 "강남"/"강남구"가 갈라진다 → 고정 선택지.
-// ponytail: 목록은 프론트 상수. 지역이 자주 바뀌면 그때 서버에서 내려받는다.
-const REGIONS = {
-  GANGNAM: "강남", HONGDAE: "홍대", SINCHON: "신촌", KONDAE: "건대",
-  JONGNO: "종로", YEOUIDO: "여의도", PANGYO: "판교",
-};
-const MEAL_TIMES = { LUNCH: "점심", DINNER: "저녁" };
 const GENDER_PREFS = { ANY: "상관없음", SAME_ONLY: "동성만" };
 const FOODS = {
   KOREAN: "한식", CHINESE: "중식", JAPANESE: "일식", WESTERN: "양식",
@@ -45,12 +39,16 @@ type ApplyPayload = {
   allowPair: boolean;
 };
 
-// 로컬 시간대 기준 YYYY-MM-DD. toISOString()은 UTC라 KST 00:00~09:00 사이에 어제가 나온다.
-// 예: KST 2026-08-29 08:00 → "2026-08-29" (toISOString()은 "2026-08-28")
-export const localDate = (d: Date = new Date()) =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-
 const today = localDate();
+const tomorrow = localDate(new Date(Date.now() + 86_400_000));
+// 서버가 당일·익일만 받는다(FR-M-04). 달력을 열어두면 고를 수 없는 날짜가 대부분이다.
+const DAYS = { [today]: "오늘", [tomorrow]: "내일" };
+
+// 식탁 칩: sr-only 라디오/체크박스 + peer 스타일. 폼 전송도 키보드 접근도 네이티브 그대로다.
+const chip =
+  "block rounded-xl border border-stone-300 bg-white px-3.5 py-2 text-sm text-stone-700 transition " +
+  "peer-checked:border-orange-600 peer-checked:bg-orange-50 peer-checked:text-orange-800 " +
+  "peer-focus-visible:ring-2 peer-focus-visible:ring-orange-200";
 
 // 낯선 사람과 대면하는 서비스의 최소 고지. 한 번 확인하면 이 브라우저에서는 다시 띄우지 않는다.
 // ponytail: localStorage 플래그 하나. 기기별로 다시 뜨는 건 감수한다 — 서버 저장은 요청받지 않았다.
@@ -84,6 +82,10 @@ const Match = () => {
   // 코드를 5회 틀려 그 코드가 폐기된 상태. 재발송 쿨다운과는 다른 상황이다.
   const [codeExpired, setCodeExpired] = useState(false);
   const prev = useRef<Status["status"] | null>(null);
+  // 버킷별 대기 인원(FR-M-10). 폼에서는 고른 날짜·시간대 기준으로 지역마다, 대기 화면에서는 내 버킷만 쓴다.
+  const [counts, setCounts] = useState<WaitingCount[] | null>(null);
+  const [day, setDay] = useState(today);
+  const [mealTime, setMealTime] = useState("LUNCH");
   // members는 나를 포함한 그룹 전원이다. 자기 자신은 신고·차단 대상이 아니다(서버가 400).
   // 토큰이 없거나 깨져 null이면 누가 나인지 알 수 없으니 전원에게 그대로 노출한다 — 서버가 막는다.
   const me = myUserId();
@@ -105,6 +107,14 @@ const Match = () => {
       });
 
   useEffect(() => { load(); }, []);
+
+  // 인원은 보조 정보라 실패해도 화면을 막지 않는다 — 숫자만 안 보인다.
+  useEffect(() => {
+    const loadCounts = () => getWaitingCounts().then((l) => setCounts(l ?? [])).catch(() => setCounts(null));
+    loadCounts();
+    const id = setInterval(loadCounts, 15_000);
+    return () => clearInterval(id);
+  }, []);
 
   // 대기/매칭 중에는 계속 폴링. 매칭 후에도 그룹이 해체될 수 있으므로 MATCHED에서 멈추면 안 된다.
   useEffect(() => {
@@ -281,12 +291,27 @@ const Match = () => {
                 그룹이 해체되어 다시 대기 중입니다.
               </p>
             )}
-            <div className={`${card} flex flex-col items-center gap-1 text-center`}>
-              <p className="text-sm text-stone-600">조건이 맞는 사람을 찾고 있어요</p>
-              <p className="text-2xl font-bold tracking-tight">
-                {new Date(status.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </p>
-              <p className={muted}>까지 기다립니다</p>
+            <div className={`${card} flex flex-col items-center gap-5 py-8 text-center`}>
+              {counts && (() => {
+                // 응답에는 나도 들어 있다. 편성 직후 잠깐 빠질 수 있어 최소 1로 본다.
+                const n = Math.max(1, countOf(counts, status.region, status.mealDate, status.mealTime));
+                return (
+                  <>
+                    <Seats count={n} size="lg" />
+                    <p className="text-sm text-stone-600 break-keep" aria-live="polite">
+                      {n === 1
+                        ? "지금은 나 혼자예요. 같은 지역·시간대로 신청하는 사람이 오면 바로 묶여요."
+                        : `나 포함 ${n}명이 같은 지역·시간대로 기다리고 있어요.`}
+                    </p>
+                  </>
+                );
+              })()}
+              <div className="flex flex-col gap-0.5">
+                <p className="text-2xl font-bold tracking-tight tabular-nums">
+                  {new Date(status.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                </p>
+                <p className={muted}>까지 기다립니다</p>
+              </div>
             </div>
             <button onClick={cancel} className={btnGhost}>신청 취소</button>
           </>
@@ -377,26 +402,53 @@ const Match = () => {
         </p>
       )}
 
-      <div className={`${card} flex flex-col gap-3`}>
-        <label className="flex flex-col gap-1.5">
-          <span className={label}>지역</span>
-          <select name="region" required className={input}>
-            {Object.entries(REGIONS).map(([v, text]) => <option key={v} value={v}>{text}</option>)}
-          </select>
-        </label>
-
-        <div className="flex gap-3">
-          <label className="flex flex-1 flex-col gap-1.5">
-            <span className={label}>날짜</span>
-            <input name="mealDate" type="date" required defaultValue={today} min={today} className={input} />
-          </label>
-          <label className="flex flex-col gap-1.5">
-            <span className={label}>점심/저녁</span>
-            <select name="mealTime" required className={input}>
-              {Object.entries(MEAL_TIMES).map(([v, text]) => <option key={v} value={v}>{text}</option>)}
-            </select>
-          </label>
+      <div className={`${card} flex flex-col gap-4`}>
+        <div className="flex gap-6">
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className={`${label} mb-1.5`}>언제</legend>
+            <div className="flex gap-2">
+              {Object.entries(DAYS).map(([v, text]) => (
+                <label key={v} className="cursor-pointer">
+                  <input type="radio" name="mealDate" value={v} checked={day === v} onChange={() => setDay(v)} className="peer sr-only" />
+                  <span className={chip}>{text}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className={`${label} mb-1.5`}>점심/저녁</legend>
+            <div className="flex gap-2">
+              {Object.entries(MEAL_TIMES).map(([v, text]) => (
+                <label key={v} className="cursor-pointer">
+                  <input type="radio" name="mealTime" value={v} checked={mealTime === v} onChange={() => setMealTime(v)} className="peer sr-only" />
+                  <span className={chip}>{text}</span>
+                </label>
+              ))}
+            </div>
+          </fieldset>
         </div>
+
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className={`${label} mb-1.5`}>지역</legend>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {Object.entries(REGIONS).map(([v, text], i) => {
+              const n = counts ? countOf(counts, v, day, mealTime) : 0;
+              return (
+                <label key={v} className="cursor-pointer">
+                  <input type="radio" name="region" value={v} required defaultChecked={i === 0} className="peer sr-only" />
+                  <span className={`${chip} flex items-center justify-between gap-2`}>
+                    <span className="font-medium">{text}</span>
+                    {counts && (
+                      <span className={`text-xs tabular-nums ${n > 0 ? "font-semibold text-orange-700" : "text-stone-400"}`}>
+                        {n > 0 ? `${n}명 대기` : "대기 없음"}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
 
         <label className="flex flex-col gap-1.5">
           <span className={label}>상대 성별</span>

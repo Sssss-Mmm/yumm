@@ -76,8 +76,14 @@ public class AuthServiceImpl implements AuthService {
             throw new CustomException(ErrorCode.WITHDRAWN_ACCOUNT);
         }
 
+        // 정지 계정(FR-D-02). 비밀번호를 맞혀야 알려준다 — 먼저 끊으면 비밀번호 없이 정지 여부가 샌다.
+        boolean passwordOk = passwordEncoder.matches(loginRequest.getPassword(), user.getPassword());
+        if (passwordOk && user.isSuspended()) {
+            throw new CustomException(ErrorCode.ACCOUNT_SUSPENDED);
+        }
+
         // 비밀번호 검증
-        if (!passwordEncoder.matches(loginRequest.getPassword(), user.getPassword())) {
+        if (!passwordOk) {
             countFailure(clientIp, email);
             throw new CustomException(ErrorCode.INVALID_CREDENTIALS);
         }

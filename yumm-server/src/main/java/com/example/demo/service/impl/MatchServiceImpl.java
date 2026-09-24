@@ -7,6 +7,7 @@ import com.example.demo.domain.Region;
 import com.example.demo.domain.User;
 import com.example.demo.dto.match.MatchApplyRequest;
 import com.example.demo.dto.match.MatchStatusResponse;
+import com.example.demo.dto.match.WaitingCountResponse;
 import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
 import com.example.demo.repository.MatchRequestRepository;
@@ -198,6 +199,14 @@ public class MatchServiceImpl implements MatchService {
                 .orElseThrow(() -> new CustomException(ErrorCode.MATCH_REQUEST_NOT_FOUND));
 
         return buildStatus(request, LocalDateTime.now());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<WaitingCountResponse> getWaitingCounts() {
+        return matchRequestRepository.countWaitingByBucket(LocalDateTime.now()).stream()
+                .map(WaitingCountResponse::from)
+                .toList();
     }
 
     @Override

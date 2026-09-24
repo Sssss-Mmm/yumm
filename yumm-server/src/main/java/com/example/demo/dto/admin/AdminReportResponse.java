@@ -21,6 +21,7 @@ public class AdminReportResponse {
     private final String reporterNickname;
     private final Long reportedId;
     private final String reportedNickname;
+    private final boolean reportedSuspended; // 정지 버튼을 "해제"로 바꿔 그릴지(FR-D-02)
     private final String reason;
     private final String reasonLabel; // ReportReason.description — 화면에 그대로 쓴다
     private final String detail;
@@ -34,6 +35,7 @@ public class AdminReportResponse {
                 report.getReporter().getNickname(),
                 report.getReported().getId(),
                 report.getReported().getNickname(),
+                report.getReported().isSuspended(),
                 report.getReason().name(),
                 report.getReason().getDescription(),
                 report.getDetail(),

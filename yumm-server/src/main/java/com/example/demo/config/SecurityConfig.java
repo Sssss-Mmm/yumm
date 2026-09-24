@@ -33,6 +33,7 @@ public class SecurityConfig {
     private static final String[] PUBLIC_URLS = {
         "/api/auth/**",     // 인증 관련 엔드포인트 (로그인, 토큰 재발급 등)
         "/api/user/signup", // 회원가입 엔드포인트
+        "/api/match/waiting-counts", // 비로그인 둘러보기(FR-A-10). 인원 수만 나간다
 
         // WebSocket 핸드셰이크. 실제 인증은 STOMP CONNECT 프레임에서
         // StompAuthChannelInterceptor가 처리한다 (핸드셰이크에는 Authorization 헤더가 없음)

@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { getToken, isAdmin, logout } from "../api";
+import { pageWidth } from "../ui";
 
 const Navbar = () => {
   const navigate = useNavigate();
@@ -15,7 +16,7 @@ const Navbar = () => {
 
   return (
     <nav className="sticky top-0 z-10 border-b border-stone-200 bg-white/80 backdrop-blur">
-      <div className="mx-auto flex w-full max-w-md items-center justify-between px-5 py-3.5">
+      <div className={`mx-auto flex w-full items-center justify-between px-5 py-3.5 ${pageWidth(pathname)}`}>
         <Link to="/" className="flex items-center gap-1.5 text-lg font-bold tracking-tight">
           <span className="h-2 w-2 rounded-full bg-orange-500" />
           yumm

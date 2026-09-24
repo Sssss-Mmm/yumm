@@ -66,6 +66,19 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Long
             """)
     List<MatchRequest> findMatchedOnDate(@Param("today") LocalDate today);
 
+    /**
+     * 버킷별 현재 대기 인원(FR-A-10, FR-M-10). 비로그인 화면에도 나가므로 인원 수 말고는 담지 않는다.
+     * 대기자가 없는 버킷은 행이 안 나온다 — 화면이 0으로 채운다.
+     */
+    @Query("""
+            SELECT m.region AS region, m.mealDate AS mealDate, m.mealTime AS mealTime, COUNT(m) AS count
+            FROM MatchRequest m
+            WHERE m.status = com.example.demo.domain.MatchStatus.WAITING
+              AND m.expiresAt > :now
+            GROUP BY m.region, m.mealDate, m.mealTime
+            """)
+    List<BucketCount> countWaitingByBucket(@Param("now") LocalDateTime now);
+
     /** 편성 지표 로그용 대기자 총원 */
     long countByStatusAndExpiresAtAfter(MatchStatus status, LocalDateTime now);
 
@@ -107,5 +120,10 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Long
         Region getRegion();
         LocalDate getMealDate();
         MealTime getMealTime();
+    }
+
+    /** countWaitingByBucket 결과 */
+    interface BucketCount extends Bucket {
+        long getCount();
     }
 }
