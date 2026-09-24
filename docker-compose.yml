@@ -1,6 +1,5 @@
-# 로컬 개발용 의존 서비스만 띄운다. 서버·웹은 호스트에서 직접 실행한다
-# (./mvnw spring-boot:run / npm run dev) — 핫 리로드를 컨테이너로 감쌀 이유가 없다.
-# 계정·DB 이름은 application.properties의 기본값과 맞춰뒀다. 환경변수 없이 그대로 붙는다.
+# 전체 스택. DB/Redis만 쓰고 앱은 호스트에서 돌리려면 `docker compose up -d db redis`.
+# JWT_SECRET은 루트 .env에서 읽는다(compose가 자동으로 읽는다). 없으면 기동을 막는다.
 services:
   db:
     image: postgres:16-alpine
@@ -10,11 +9,38 @@ services:
       POSTGRES_PASSWORD: demo_pass
     ports: ["5432:5432"]
     volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U demo_user -d demo_db"]
+      interval: 5s
+      retries: 10
 
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
     # ponytail: 영속화 없음. 리프레시 토큰·블랙리스트만 들어서 재시작하면 재로그인하면 된다.
+
+  server:
+    build: ./yumm-server
+    environment:
+      JWT_SECRET: ${JWT_SECRET:?openssl rand -base64 32 으로 만들어 .env에 넣는다}
+      DB_URL: jdbc:postgresql://db:5432/demo_db
+      DB_USERNAME: demo_user
+      DB_PASSWORD: demo_pass
+      REDIS_HOST: redis
+      # 메일은 선택이다. 비면 EmailServiceImpl이 발송을 건너뛴다.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-no-reply@yumm.local}
+    ports: ["8080:8080"]
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_started}
+
+  web:
+    build: ./yumm-web
+    ports: ["3000:80"]
+    depends_on: [server]
 
 volumes:
   pgdata:

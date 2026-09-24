@@ -7,11 +7,20 @@
 PostgreSQL과 Redis가 필요하다. 직접 설치하는 대신 컨테이너로 띄우면 된다.
 
 ```bash
-docker compose up -d      # postgres:16 + redis:7. 계정은 아래 기본값과 맞춰져 있다
-docker compose down       # 중지 (데이터는 pgdata 볼륨에 남는다. 지우려면 -v)
+docker compose up -d --build   # db·redis·server·web 전부. 웹은 http://localhost:3000
+docker compose up -d db redis  # 의존 서비스만. 서버·웹은 호스트에서 돌릴 때
+docker compose down            # 중지 (데이터는 pgdata 볼륨에 남는다. 지우려면 -v)
 ```
 
-서버와 웹은 컨테이너에 넣지 않았다 — 핫 리로드를 감싸면 개발 루프만 느려진다.
+`JWT_SECRET`을 루트 `.env`에 넣어야 컨테이너가 뜬다. 비어 있으면 compose가 기동 전에 막는다.
+
+```bash
+echo "JWT_SECRET=$(openssl rand -base64 32)" >> .env
+```
+
+컨테이너 웹은 nginx가 정적 파일을 서빙하면서 `/api`·`/ws`만 `server:8080`으로 넘긴다 — Vite 프록시와
+같은 구조라 같은 출처가 되고 CORS를 타지 않는다. **코드를 고치면서 개발할 때는 컨테이너를 쓰지 않는다.**
+`db`·`redis`만 띄우고 서버·웹은 아래처럼 호스트에서 돌리는 게 핫 리로드가 살아 있어 빠르다.
 
 **Java 17이 필요하다.** 더 높은 JDK가 기본이면 `JAVA_HOME`을 17로 지정해야 빌드된다.
 
