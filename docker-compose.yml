@@ -1,0 +1,20 @@
+# 로컬 개발용 의존 서비스만 띄운다. 서버·웹은 호스트에서 직접 실행한다
+# (./mvnw spring-boot:run / npm run dev) — 핫 리로드를 컨테이너로 감쌀 이유가 없다.
+# 계정·DB 이름은 application.properties의 기본값과 맞춰뒀다. 환경변수 없이 그대로 붙는다.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: demo_db
+      POSTGRES_USER: demo_user
+      POSTGRES_PASSWORD: demo_pass
+    ports: ["5432:5432"]
+    volumes: [pgdata:/var/lib/postgresql/data]
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+    # ponytail: 영속화 없음. 리프레시 토큰·블랙리스트만 들어서 재시작하면 재로그인하면 된다.
+
+volumes:
+  pgdata:

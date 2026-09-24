@@ -4,7 +4,14 @@
 
 ## 실행
 
-PostgreSQL과 Redis가 필요하다.
+PostgreSQL과 Redis가 필요하다. 직접 설치하는 대신 컨테이너로 띄우면 된다.
+
+```bash
+docker compose up -d      # postgres:16 + redis:7. 계정은 아래 기본값과 맞춰져 있다
+docker compose down       # 중지 (데이터는 pgdata 볼륨에 남는다. 지우려면 -v)
+```
+
+서버와 웹은 컨테이너에 넣지 않았다 — 핫 리로드를 감싸면 개발 루프만 느려진다.
 
 **Java 17이 필요하다.** 더 높은 JDK가 기본이면 `JAVA_HOME`을 17로 지정해야 빌드된다.
 
