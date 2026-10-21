@@ -175,6 +175,13 @@ export const getMatchStatus = <T extends MatchStatus = MatchStatus>() => api<T>(
 /** 매칭된 그룹에서 이탈한다. 남은 인원은 서버가 다시 WAITING으로 되돌린다. */
 export const leaveGroup = () => api<void>("/match/group", "DELETE");
 
+/** 식사 당일~다음 날 사이이고 아직 참석 체크를 안 낸 그룹들(FR-C-06). members에 나도 들어 있다. */
+export const getPendingAttendance = () => api<MatchStatus[]>("/match/attendance");
+
+/** 참석 체크 제출. 나를 뺀 그룹원 전원을 한 번에 보낸다. 그룹당 한 번(두 번째는 409). */
+export const submitAttendance = (groupId: string, checks: { userId: number; attended: boolean }[]) =>
+  api<void>(`/match/groups/${groupId}/attendance`, "POST", { checks });
+
 /** 신고. reason은 서버 enum 값(HARASSMENT 등). */
 export const reportUser = (reportedUserId: number, reason: string, detail?: string) =>
   api<void>("/reports", "POST", { reportedUserId, reason, detail });

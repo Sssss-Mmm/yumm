@@ -1,10 +1,12 @@
 package com.example.demo.controller;
 
 import com.example.demo.common.ApiResponse;
+import com.example.demo.dto.match.AttendanceCheckRequest;
 import com.example.demo.dto.match.MatchApplyRequest;
 import com.example.demo.dto.match.MatchStatusResponse;
 import com.example.demo.dto.match.WaitingCountResponse;
 import com.example.demo.security.CustomUserDetails;
+import com.example.demo.service.AttendanceService;
 import com.example.demo.service.MatchService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
@@ -21,6 +23,7 @@ import java.util.List;
 public class MatchController {
 
     private final MatchService matchService;
+    private final AttendanceService attendanceService;
 
     /**
      * 밥메이트 매칭 신청 API.
@@ -94,5 +97,34 @@ public class MatchController {
             description = "지역·날짜·시간대별 현재 대기 인원을 줍니다. 비로그인 둘러보기(FR-A-10)와 대기 화면(FR-M-10)이 함께 씁니다.")
     public ResponseEntity<ApiResponse<List<WaitingCountResponse>>> getWaitingCounts() {
         return ApiResponse.ok("대기 인원 조회 성공", matchService.getWaitingCounts());
+    }
+
+    /**
+     * 참석 체크 대기 목록 API. 식사 당일~다음 날 사이이고 아직 체크하지 않은 그룹만 내려갑니다(FR-C-06).
+     * 그룹원 목록에는 나도 포함됩니다.
+     */
+    @GetMapping("/attendance")
+    @Operation(summary = "참석 체크 대기 목록", description = "만남 뒤 참석 여부를 아직 체크하지 않은 그룹 목록을 조회합니다.")
+    public ResponseEntity<ApiResponse<List<MatchStatusResponse>>> getPendingAttendance(
+            @AuthenticationPrincipal CustomUserDetails userDetails) {
+
+        return ApiResponse.ok("참석 체크 대기 목록 조회 성공", attendanceService.getPending(userDetails.getId()));
+    }
+
+    /**
+     * 참석 체크 제출 API. 나를 뺀 그룹원 전원의 참석 여부를 한 번에 제출하며, 그룹당 한 번만 할 수 있습니다(FR-C-06).
+     */
+    @PostMapping("/groups/{groupId}/attendance")
+    @Operation(summary = "참석 체크 제출",
+            description = "식사 당일부터 다음 날까지, 나를 뺀 그룹원 전원이 실제로 나왔는지 제출합니다. "
+                    + "그룹당 한 번이며 일부만 보내거나 그룹원이 아닌 사람을 넣으면 400입니다.")
+    public ResponseEntity<ApiResponse<Void>> submitAttendance(
+            @AuthenticationPrincipal CustomUserDetails userDetails,
+            @PathVariable String groupId,
+            @Valid @RequestBody AttendanceCheckRequest request) {
+
+        attendanceService.submit(userDetails.getId(), groupId, request);
+
+        return ApiResponse.ok("참석 체크가 제출되었습니다.");
     }
 }

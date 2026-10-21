@@ -4,6 +4,7 @@ import {
   ApiError, MEAL_TIMES, REGIONS, api, blockUser, countOf, getWaitingCounts, localDate, confirmEmailCode, getMatchStatus, leaveGroup, myUserId, reportUser, sendEmailCode,
   type MatchMember as Member, type MatchStatus, type WaitingCount,
 } from "../api";
+import AttendanceCheck from "../components/AttendanceCheck";
 import Seats from "../components/Seats";
 import { btn, btnGhost, btnSm, card, h1, input, label, muted } from "../ui";
 import { useCountdown } from "../useCountdown";
@@ -267,6 +268,7 @@ const Match = () => {
   if (status?.status === "WAITING" || status?.status === "MATCHED") {
     return (
       <div className="flex flex-col gap-4">
+        <AttendanceCheck />
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             {status.status === "WAITING"
@@ -391,6 +393,7 @@ const Match = () => {
 
   return (
     <>
+    <div className="mb-4 empty:hidden"><AttendanceCheck /></div>
     <form onSubmit={apply} className="flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h1 className={h1}>밥메이트 신청</h1>
