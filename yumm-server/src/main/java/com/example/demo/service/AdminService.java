@@ -1,10 +1,12 @@
 package com.example.demo.service;
 
 import com.example.demo.dto.admin.AdminReportResponse;
+import com.example.demo.dto.admin.AdminStatsResponse;
 
+import java.time.LocalDate;
 import java.util.List;
 
-/** 관리자 기능. 신고를 읽고 처리 표시를 남기고(FR-D-01), 계정을 정지·해제한다(FR-D-02). */
+/** 관리자 기능. 신고를 읽고 처리 표시를 남기고(FR-D-01), 계정을 정지·해제하고(FR-D-02), 운영 지표를 본다(FR-D-03). */
 public interface AdminService {
 
     /**
@@ -25,4 +27,7 @@ public interface AdminService {
 
     /** 정지를 해제한다. 정지로 취소된 신청·그룹은 되살리지 않는다. 다시 로그인하면 된다. */
     void unsuspendUser(Long userId);
+
+    /** 식사 날짜가 [from, to]인 신청·그룹의 성사율·대기시간·만남 전환율·노쇼율(FR-D-03). */
+    AdminStatsResponse getStats(LocalDate from, LocalDate to);
 }

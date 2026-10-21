@@ -4,6 +4,7 @@ import com.example.demo.domain.Gender;
 import com.example.demo.domain.MatchRequest;
 import com.example.demo.domain.MatchStatus;
 import com.example.demo.domain.User;
+import com.example.demo.repository.AttendanceCheckRepository;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.ReportRepository;
 import com.example.demo.repository.UserRepository;
@@ -52,7 +53,7 @@ class AdminSuspendTest {
         matchService = mock(MatchService.class);
         jwtRedisService = mock(JwtRedisService.class);
         service = new AdminServiceImpl(mock(ReportRepository.class), userRepository, matchRequestRepository,
-                matchService, jwtRedisService);
+                matchService, jwtRedisService, mock(AttendanceCheckRepository.class));
         user = User.builder().id(USER_ID).email("u@yumm.test").password("hashed")
                 .nickname("먹보").gender(Gender.MALE).birthYear(1995).build();
         when(userRepository.findById(USER_ID)).thenReturn(Optional.of(user));

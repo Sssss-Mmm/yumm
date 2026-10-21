@@ -79,6 +79,9 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Long
             """)
     List<BucketCount> countWaitingByBucket(@Param("now") LocalDateTime now);
 
+    /** 식사 날짜가 기간 안인 신청 전부(FR-D-03 지표). 지표 계산이 지역·끼니만 읽으므로 user는 읽지 않는다. */
+    List<MatchRequest> findByMealDateBetween(LocalDate from, LocalDate to);
+
     /** 편성 지표 로그용 대기자 총원 */
     long countByStatusAndExpiresAtAfter(MatchStatus status, LocalDateTime now);
 

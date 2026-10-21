@@ -279,3 +279,21 @@ SELECT count(*) FILTER (WHERE email_verified_at IS NULL) AS 미인증, count(*) 
 `NULL`이면 미인증이고 값이 있으면 인증 시각이다. **백필하지 않는다** — 인증한 적 없는 주소를 인증 처리하면
 게이트를 켠 이유(차단 회원의 재가입 차단)가 사라진다. 인증 코드는 DB가 아니라 Redis(`emailVerify:{userId}`,
 TTL 10분)에 있으므로 마이그레이션 대상이 아니다.
+
+**7) `match_requests` — `matched_at` 컬럼 추가 (운영 지표의 평균 대기시간)**
+
+FR-D-03. 처음 그룹에 묶인 시각이다. nullable이라 `ddl-auto=update`가 알아서 추가한다.
+
+```sql
+BEGIN;
+ALTER TABLE match_requests ADD COLUMN IF NOT EXISTS matched_at timestamp;
+COMMIT;
+```
+
+**백필하지 않는다** — 성사 시각을 알 수 없다. 지표는 `matched_at`이 없어도 `group_id`가 남아 있으면 성사로 센다.
+배포 전에 성사됐다가 이탈한 행만 취소와 구분되지 않아 실패로 잡히고, 평균 대기시간은 배포 뒤 성사분부터 잡힌다.
+
+**8) `attendance_checks` 테이블 추가 (참석 상호 체크)**
+
+FR-C-06. 새 테이블이라 `ddl-auto=update`가 만든다. `(group_id, checker_id, target_id)` 유니크.
+기존 데이터와 엮이는 게 없어 백필할 것도 없다.

@@ -87,9 +87,19 @@ public class MatchRequest {
      */
     private LocalDateTime remindedAt;
 
+    /**
+     * 처음 그룹에 묶인 시각(FR-D-03 평균 대기시간). NULL이면 한 번도 묶인 적 없다.
+     * 이탈·해체로 groupId가 지워져도 남으므로 "성사된 적 있는 신청"의 판정도 이 컬럼으로 한다.
+     */
+    private LocalDateTime matchedAt;
+
     public void assignToGroup(String groupId) {
         this.groupId = groupId;
         this.status = MatchStatus.MATCHED;
+        // ponytail: 첫 성사만 남긴다. 해체 뒤 재편성까지 걸린 시간은 대기시간 지표에 넣지 않는다.
+        if (this.matchedAt == null) {
+            this.matchedAt = LocalDateTime.now();
+        }
     }
 
     /** 당일 아침 리마인드를 보냈다고 표시한다(FR-N-04). 다음 주기에 다시 뽑히지 않는다. */

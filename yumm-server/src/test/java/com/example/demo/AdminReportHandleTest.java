@@ -6,6 +6,7 @@ import com.example.demo.domain.ReportReason;
 import com.example.demo.domain.User;
 import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
+import com.example.demo.repository.AttendanceCheckRepository;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.ReportRepository;
 import com.example.demo.repository.UserRepository;
@@ -41,7 +42,7 @@ class AdminReportHandleTest {
     void setUp() {
         reportRepository = mock(ReportRepository.class);
         service = new AdminServiceImpl(reportRepository, mock(UserRepository.class), mock(MatchRequestRepository.class),
-                mock(MatchService.class), mock(JwtRedisService.class));
+                mock(MatchService.class), mock(JwtRedisService.class), mock(AttendanceCheckRepository.class));
     }
 
     private static User user(Long id, String nickname) {

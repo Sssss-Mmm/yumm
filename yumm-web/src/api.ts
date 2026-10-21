@@ -112,6 +112,25 @@ export const getReports = (includeHandled = false) =>
 export const handleReport = (id: number) =>
   api<AdminReport>(`/admin/reports/${id}/handle`, "POST");
 
+/** 운영 지표(FR-D-03). 비율은 %, 분모가 0이면 null. */
+export type Funnel = { requests: number; matched: number; matchRate: number | null; avgWaitMinutes: number | null };
+export type NoShow = { judged: number; noShows: number; flagged: number; noShowRate: number | null; flaggedRate: number | null };
+export type AdminStats = {
+  from: string;
+  to: string;
+  funnel: Funnel;
+  buckets: { region: string; mealTime: string; funnel: Funnel }[];
+  meetings: {
+    groups: number; pairGroups: number; pairShare: number | null;
+    respondedGroups: number; metGroups: number; conversionRate: number | null;
+    pair: NoShow; group: NoShow;
+  };
+};
+
+/** 식사 날짜 [from, to] 기준. 비우면 서버가 오늘까지 최근 7일로 잡는다. */
+export const getStats = (from?: string, to?: string) =>
+  api<AdminStats>(`/admin/stats?${new URLSearchParams({ ...(from && { from }), ...(to && { to }) })}`);
+
 /** 계정 정지/해제(FR-D-02). 정지하면 서버가 진행 중인 매칭도 정리한다. */
 export const setSuspended = (userId: number, suspended: boolean) =>
   api<void>(`/admin/users/${userId}/suspend`, suspended ? "POST" : "DELETE");

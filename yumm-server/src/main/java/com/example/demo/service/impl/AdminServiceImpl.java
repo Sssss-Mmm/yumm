@@ -4,20 +4,28 @@ import com.example.demo.domain.MatchStatus;
 import com.example.demo.domain.Report;
 import com.example.demo.domain.User;
 import com.example.demo.dto.admin.AdminReportResponse;
+import com.example.demo.dto.admin.AdminStatsResponse;
 import com.example.demo.exception.CustomException;
 import com.example.demo.exception.ErrorCode;
+import com.example.demo.domain.MatchRequest;
+import com.example.demo.repository.AttendanceCheckRepository;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.ReportRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.AdminService;
 import com.example.demo.service.JwtRedisService;
 import com.example.demo.service.MatchService;
+import com.example.demo.service.MatchStats;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,6 +36,7 @@ public class AdminServiceImpl implements AdminService {
     private final MatchRequestRepository matchRequestRepository;
     private final MatchService matchService;
     private final JwtRedisService jwtRedisService;
+    private final AttendanceCheckRepository attendanceCheckRepository;
 
     @Override
     @Transactional(readOnly = true)
@@ -69,6 +78,22 @@ public class AdminServiceImpl implements AdminService {
     @Transactional
     public void unsuspendUser(Long userId) {
         findUser(userId).unsuspend();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public AdminStatsResponse getStats(LocalDate from, LocalDate to) {
+        if (from.isAfter(to)) {
+            throw new CustomException(ErrorCode.VALIDATION_ERROR);
+        }
+        List<MatchRequest> requests = matchRequestRepository.findByMealDateBetween(from, to);
+        Set<String> groupIds = requests.stream()
+                .map(MatchRequest::getGroupId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return MatchStats.compute(from, to, requests,
+                groupIds.isEmpty() ? List.of() : attendanceCheckRepository.findByGroupIdIn(groupIds),
+                LocalDateTime.now());
     }
 
     private User findUser(Long userId) {

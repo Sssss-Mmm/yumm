@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import AdminStats from "../components/AdminStats";
 import { getReports, handleReport, setSuspended, type AdminReport } from "../api";
 import { btnSm, card, h1, muted } from "../ui";
 
@@ -58,6 +59,8 @@ const Admin = () => {
 
   return (
     <div className="flex flex-col gap-4">
+      <AdminStats />
+      <hr className="border-stone-200" />
       <div className="flex flex-col gap-1">
         <h1 className={h1}>신고 처리</h1>
         <p className={muted}>접수된 순서대로 처리합니다.</p>
