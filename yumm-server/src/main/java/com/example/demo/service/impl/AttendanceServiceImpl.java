@@ -27,11 +27,6 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AttendanceServiceImpl implements AttendanceService {
 
-    // ponytail: 식사 당일부터 다음 날까지 받는다. 채팅방이 다음 날 자정에 닫히는 것(FR-T-05)과 같은 창이다.
-    // 날짜 단위라 점심 그룹은 당일 아침에도 체크가 열린다 — 만날 시각이 시스템에 없어서다(product-plan 8절).
-    // 약속 카드(FR-C-05)로 시각이 생기면 "약속 시각 이후"로 좁힌다.
-    private static final int OPEN_DAYS_AFTER_MEAL = 1;
-
     private final AttendanceCheckRepository attendanceCheckRepository;
     private final MatchRequestRepository matchRequestRepository;
 
@@ -93,7 +88,12 @@ public class AttendanceServiceImpl implements AttendanceService {
                 .toList());
     }
 
+    /**
+     * ponytail: 식사 당일부터 채팅방이 닫힐 때(FR-T-05)까지 받는다.
+     * 날짜 단위라 점심 그룹은 당일 아침에도 체크가 열린다 — 만날 시각이 시스템에 없어서다(product-plan 8절).
+     * 약속 카드(FR-C-05)로 시각이 생기면 "약속 시각 이후"로 좁힌다.
+     */
     private static boolean isOpen(LocalDate mealDate, LocalDate today) {
-        return !today.isBefore(mealDate) && !today.isAfter(mealDate.plusDays(OPEN_DAYS_AFTER_MEAL));
+        return !today.isBefore(mealDate) && !today.isAfter(mealDate.plusDays(MatchRequest.ROOM_OPEN_DAYS_AFTER_MEAL));
     }
 }

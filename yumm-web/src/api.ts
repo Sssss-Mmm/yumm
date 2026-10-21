@@ -182,6 +182,8 @@ export type MatchStatus = {
   mealDate: string;
   mealTime: string;
   expiresAt: string;
+  /** 채팅방에서 아직 말할 수 있는지. 식사 다음 날 자정에 닫힌다(FR-T-05). 그룹이 없으면 false. */
+  chatOpen: boolean;
   members: MatchMember[];
 };
 

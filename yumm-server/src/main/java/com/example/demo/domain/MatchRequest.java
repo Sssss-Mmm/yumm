@@ -93,6 +93,17 @@ public class MatchRequest {
      */
     private LocalDateTime matchedAt;
 
+    /**
+     * 채팅방은 식사 다음 날 자정에 닫힌다(FR-T-05). 무기한 열어두면 사적 연락 통로가 된다.
+     * 참석 체크(FR-C-06)도 같은 창이 끝날 때 닫힌다.
+     */
+    public static final int ROOM_OPEN_DAYS_AFTER_MEAL = 1;
+
+    /** 그룹 채팅방에서 아직 말할 수 있는지(FR-T-05). 식사 전에도 열려 있다 — 약속을 잡는 곳이다. */
+    public boolean isRoomOpen(LocalDate today) {
+        return !today.isAfter(mealDate.plusDays(ROOM_OPEN_DAYS_AFTER_MEAL));
+    }
+
     public void assignToGroup(String groupId) {
         this.groupId = groupId;
         this.status = MatchStatus.MATCHED;

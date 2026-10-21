@@ -1,5 +1,6 @@
 package com.example.demo;
 
+import com.example.demo.domain.MatchRequest;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.security.CustomUserDetails;
@@ -17,6 +18,7 @@ import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -162,5 +164,32 @@ class StompAuthChannelInterceptorTest {
         assertThatThrownBy(() -> interceptor.preSend(message, channel))
                 .isInstanceOf(MessageDeliveryException.class)
                 .hasMessageContaining("올바르지 않습니다");
+    }
+
+    @Test
+    @DisplayName("식사 다음 날 자정이 지난 방은 구성원이어도 구독·발신할 수 없다 (FR-T-05)")
+    void closedRoomRejectsSubscribeAndSend() {
+        LocalDate cutoff = LocalDate.now().minusDays(MatchRequest.ROOM_OPEN_DAYS_AFTER_MEAL);
+        when(matchRequestRepository.existsByGroupIdAndMealDateBefore(ROOM_ID, cutoff)).thenReturn(true);
+
+        for (Message<byte[]> message : List.of(
+                frame(StompCommand.SUBSCRIBE, "/sub/chat/room/" + ROOM_ID, 1L),
+                frame(StompCommand.SEND, "/pub/chatroom." + ROOM_ID, 1L))) {
+            assertThatThrownBy(() -> interceptor.preSend(message, channel))
+                    .isInstanceOf(MessageDeliveryException.class)
+                    .hasMessageContaining("종료된 채팅방");
+        }
+    }
+
+    @Test
+    @DisplayName("채팅방은 식사 전부터 식사 다음 날까지 열려 있다")
+    void roomOpenWindow() {
+        LocalDate meal = LocalDate.of(2026, 10, 21);
+        MatchRequest request = MatchRequest.builder().mealDate(meal).build();
+
+        assertThat(request.isRoomOpen(meal.minusDays(1))).isTrue();
+        assertThat(request.isRoomOpen(meal)).isTrue();
+        assertThat(request.isRoomOpen(meal.plusDays(1))).isTrue();
+        assertThat(request.isRoomOpen(meal.plusDays(2))).isFalse();
     }
 }

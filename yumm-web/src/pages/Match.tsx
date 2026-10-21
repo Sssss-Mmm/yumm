@@ -376,8 +376,8 @@ const Match = () => {
             {/* 채팅방 입장이 곧 참석 의사 표시다 (FR-C-01) */}
             <div className="flex gap-2">
               {status.groupId && (
-                <Link to={`/chat/${status.groupId}`} className={`${btn} flex-1`}>
-                  채팅방 입장
+                <Link to={`/chat/${status.groupId}`} className={`${status.chatOpen ? btn : btnGhost} flex-1`}>
+                  {status.chatOpen ? "채팅방 입장" : "지난 대화 보기"}
                 </Link>
               )}
               <button onClick={leave} disabled={leaving} className={`${btnGhost} flex-1`}>

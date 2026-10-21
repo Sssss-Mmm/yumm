@@ -118,6 +118,12 @@ public interface MatchRequestRepository extends JpaRepository<MatchRequest, Long
      */
     boolean existsByGroupIdAndUser_Id(String groupId, Long userId);
 
+    /**
+     * 닫힌 채팅방인지(FR-T-05). 식사 날짜가 cutoff보다 앞이면 닫혔다. 판정 기준은 MatchRequest.isRoomOpen과 같다.
+     * 한 그룹은 한 버킷에서 나오므로 구성원 누구의 행으로 봐도 결과가 같다.
+     */
+    boolean existsByGroupIdAndMealDateBefore(String groupId, LocalDate cutoff);
+
     /** findWaitingBuckets 결과를 받는 프로젝션 (버킷 키 3개) */
     interface Bucket {
         Region getRegion();

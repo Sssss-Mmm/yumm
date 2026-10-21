@@ -1,5 +1,6 @@
 package com.example.demo.security;
 
+import com.example.demo.domain.MatchRequest;
 import com.example.demo.repository.MatchRequestRepository;
 import com.example.demo.repository.UserRepository;
 import com.example.demo.service.JwtRedisService;
@@ -15,6 +16,8 @@ import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Component;
+
+import java.time.LocalDate;
 
 /**
  * WebSocket 인증/인가.
@@ -104,6 +107,14 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
         if (!matchRequestRepository.existsByGroupIdAndUser_Id(roomId, userId)) {
             throw new MessageDeliveryException("이 채팅방에 참여할 권한이 없습니다.");
+        }
+
+        // 식사 다음 날 자정에 닫는다(FR-T-05). 닫는 배치는 없다 — 프레임마다 날짜로 판정한다.
+        // 열려 있던 구독은 끊지 않는다. 아무도 보낼 수 없으니 더 받을 메시지가 없다.
+        // 지난 대화 조회(REST)는 막지 않는다 — 신고할 때 다시 볼 수 있어야 한다.
+        LocalDate cutoff = LocalDate.now().minusDays(MatchRequest.ROOM_OPEN_DAYS_AFTER_MEAL);
+        if (matchRequestRepository.existsByGroupIdAndMealDateBefore(roomId, cutoff)) {
+            throw new MessageDeliveryException("종료된 채팅방입니다.");
         }
     }
 

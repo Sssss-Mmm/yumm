@@ -13,7 +13,8 @@ const time = (sentAt: string) => {
 type Gone =
   | { kind: "queued" }                   // 해체 → 대기열 자동 복귀
   | { kind: "ended" }                    // 지난 끼니라 종료 / 내가 나감 / 신청 이력 없음
-  | { kind: "moved"; groupId: string };  // 이미 다음 그룹에 편성됨
+  | { kind: "moved"; groupId: string }   // 이미 다음 그룹에 편성됨
+  | { kind: "closed" };                  // 식사 다음 날 자정이 지나 닫힘(FR-T-05)
 
 const GONE = {
   queued: {
@@ -30,6 +31,11 @@ const GONE = {
     title: "새 그룹으로 편성됐어요",
     body: "이 그룹은 끝났고 이미 다른 그룹에 편성됐습니다. 새 채팅방에서 이어가 주세요.",
     action: "새 채팅방으로",
+  },
+  closed: {
+    title: "채팅방이 닫혔어요",
+    body: "채팅방은 식사 다음 날 자정에 닫혀요. 지난 대화는 계속 볼 수 있고, 불편한 일이 있었다면 매칭 화면에서 신고할 수 있어요.",
+    action: "매칭 화면으로",
   },
 } as const;
 
@@ -89,10 +95,11 @@ const Chat = () => {
     const check = () =>
       getMatchStatus()
         .then((s) => {
-          if (stop || s.groupId === groupId) return;
+          if (stop || (s.groupId === groupId && s.chatOpen)) return;
           socket.current?.close();  // close()는 onError를 삼킨다 → "연결이 끊겼습니다" 대신 아래 배너가 뜬다
           setGone(
-            s.status === "WAITING" ? { kind: "queued" }
+            s.groupId === groupId ? { kind: "closed" }
+              : s.status === "WAITING" ? { kind: "queued" }
               : s.status === "MATCHED" && s.groupId ? { kind: "moved", groupId: s.groupId }
                 : { kind: "ended" }
           );

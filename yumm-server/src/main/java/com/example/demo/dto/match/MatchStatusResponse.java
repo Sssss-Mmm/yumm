@@ -31,6 +31,9 @@ public class MatchStatusResponse implements java.io.Serializable {
     private final MealTime mealTime;
     private final LocalDateTime expiresAt;
 
+    /** 그룹 채팅방에서 아직 말할 수 있는지(FR-T-05). 그룹이 없으면 false. */
+    private final boolean chatOpen;
+
     /** 매칭 완료 시 나를 포함한 그룹 전원. 대기 중이면 빈 목록. */
     private final List<MatchMemberResponse> members;
 
@@ -42,6 +45,7 @@ public class MatchStatusResponse implements java.io.Serializable {
                 .mealDate(request.getMealDate())
                 .mealTime(request.getMealTime())
                 .expiresAt(request.getExpiresAt())
+                .chatOpen(request.getGroupId() != null && request.isRoomOpen(now.toLocalDate()))
                 .members(groupMembers.stream().map(MatchMemberResponse::from).toList())
                 .build();
     }
